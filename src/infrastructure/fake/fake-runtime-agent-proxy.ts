@@ -1,0 +1,20 @@
+import type { RuntimeAgentProxyPort, RuntimeProxyRequest, RuntimeProxyResponse } from "../../ports/runtime-agent-proxy-port";
+
+export class FakeRuntimeAgentProxy implements RuntimeAgentProxyPort {
+  readonly requests: RuntimeProxyRequest[] = [];
+
+  async forward(request: RuntimeProxyRequest): Promise<RuntimeProxyResponse> {
+    this.requests.push(request);
+    return {
+      body: {
+        proxied: true,
+        path: request.path,
+        query: request.query,
+      },
+      headers: {
+        "content-type": "application/json",
+      },
+      statusCode: 200,
+    };
+  }
+}
