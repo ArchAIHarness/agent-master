@@ -1,0 +1,45 @@
+# Git metadata
+.git/
+.gitignore
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Runtime cache
+.bun-cache/
+.cache/
+.tmp/
+tmp/
+
+# Logs
+*.log
+logs/
+
+# Environment and local real config
+.env
+.env.*
+!.env.example
+config.local.*
+*.local.json
+*.local.yaml
+*.local.yml
+kubeconfig*
+*.kubeconfig
+.kube/
+**/.kube/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
