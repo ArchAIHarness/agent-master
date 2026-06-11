@@ -1,0 +1,45 @@
+# agent-control runtime configuration template.
+# Do not put kubeconfig, Token, Cookie, password, certificate, private key, or real secret here.
+# Sensitive values must be provided by Kubernetes ServiceAccount, Secret, mounted files,
+# environment variables, or an external controlled configuration system.
+
+server:
+  port: 3000
+  host: 0.0.0.0
+  log: info
+
+redis:
+  # Internal service address placeholder. Do not put password in url.
+  host: redis
+  port: 6379
+  db: 0
+  key: agent-runtime:user
+  # Optional. Empty means Redis AUTH is disabled.
+  # If Redis requires password, inject it through Kubernetes Secret or a controlled runtime environment.
+  # Example: password: ${REDIS_PASSWORD}
+  password: ""
+
+runtime:
+  # Replace with the final ArchAIHarness agent-runtime image when available.
+  image: ghcr.io/archaiharness/agent-runtime:latest
+  ttl: 3600
+  timeout: 60000
+  port: 4096
+  workdir: /nas/agent-control/users
+  scenes:
+    coding: /nas/agent-control/scenes/coding
+    review: /nas/agent-control/scenes/review
+
+nas:
+  path: /nas/agent-control
+
+kubernetes:
+  cluster: default
+  namespace: agent-runtime
+  clusters:
+    - name: default
+      namespace: agent-runtime
+      auth: inCluster
+      scheduling:
+        enabled: true
+        maxRuntime: 100

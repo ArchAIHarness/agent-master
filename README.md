@@ -765,8 +765,11 @@ server:
   log: info
 
 redis:
-  url: redis://redis:6379
+  host: redis
+  port: 6379
+  db: 0
   key: agent-runtime:user
+  password: ""
 
 runtime:
   image: ghcr.io/example/opencode-runtime:latest
@@ -800,8 +803,11 @@ kubernetes:
 | `server.port` | HTTP 服务端口。 |
 | `server.host` | HTTP 监听地址。 |
 | `server.log` | 日志级别。 |
-| `redis.url` | Redis 连接地址，写服务内可访问地址；如需认证，密码不写入 URL，单独由 Kubernetes Secret 提供。 |
+| `redis.host` | Redis 服务主机名或服务名，写服务内可访问地址，不包含密码。 |
+| `redis.port` | Redis 服务端口，默认 `6379`。 |
+| `redis.db` | Redis 逻辑库编号，默认 `0`；用于区分环境或租户时必须由部署配置显式指定。 |
 | `redis.key` | Runtime Redis Key 前缀，固定为 `agent-runtime:user`。 |
+| `redis.password` | 可选 Redis 密码；为空字符串表示不启用 Redis AUTH。真实密码不得提交到仓库，部署时应通过 Kubernetes Secret、环境变量替换或受控配置系统注入，例如 `${REDIS_PASSWORD}`。 |
 | `runtime.image` | OpenCode Runtime 镜像。 |
 | `runtime.ttl` | Runtime 租约有效期，连接存在时续约到 1 小时。 |
 | `runtime.timeout` | Runtime API 代理超时时间。 |
