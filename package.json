@@ -1,0 +1,22 @@
+{
+  "name": "agent-control",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Bun + TypeScript + Fastify service for OpenCode-based Agent Pod control and Agent API proxying.",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/sensible": "latest",
+    "fastify": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}
