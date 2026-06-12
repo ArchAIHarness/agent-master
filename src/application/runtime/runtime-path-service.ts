@@ -1,9 +1,14 @@
-import { MissingUserIdError } from "../../domain/runtime/runtime-errors";
+import { InvalidUserIdError, MissingUserIdError } from "../../domain/runtime/runtime-errors";
+
+const safeUserIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export function requireUserId(value: string | undefined): string {
   const userId = value?.trim();
   if (!userId) {
     throw new MissingUserIdError();
+  }
+  if (!safeUserIdPattern.test(userId) || userId === "." || userId === ".." || userId.includes("..")) {
+    throw new InvalidUserIdError();
   }
   return userId;
 }

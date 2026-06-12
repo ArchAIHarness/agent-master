@@ -7,7 +7,9 @@ import type { RuntimeWorkloadPort } from "./runtime-workload-port";
 
 export interface RuntimeDependenciesOptions {
   readonly clock: RuntimeClock;
+  readonly cluster: string;
   readonly eventBus: RuntimeEventBus;
+  readonly namespace: string;
   readonly proxy: RuntimeAgentProxyPort;
   readonly runtimeImage: string;
   readonly runtimePort: number;

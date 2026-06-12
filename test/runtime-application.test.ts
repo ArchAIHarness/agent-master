@@ -7,7 +7,9 @@ import { RuntimeQueryService } from "../src/application/runtime/runtime-query-se
 import { InMemoryRuntimeEventBus } from "../src/infrastructure/fake/in-memory-runtime-event-bus";
 import { InMemoryRuntimeStore } from "../src/infrastructure/fake/in-memory-runtime-store";
 import { FakeRuntimeAgentProxy } from "../src/infrastructure/fake/fake-runtime-agent-proxy";
+import type { RuntimeSnapshot } from "../src/domain/runtime/runtime";
 import { FakeRuntimeWorkloadAdapter } from "../src/infrastructure/fake/fake-runtime-workload-adapter";
+import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../src/ports/runtime-workload-port";
 import { FixedRuntimeClock } from "../src/infrastructure/fake/fixed-runtime-clock";
 
 function buildServices() {
@@ -21,7 +23,9 @@ function buildServices() {
   };
   const commandService = new RuntimeCommandService({
     clock,
+    cluster: "default",
     eventBus,
+    namespace: "agent-runtime",
     runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
     runtimePort: 4096,
     scenes,
@@ -130,6 +134,30 @@ describe("Runtime application services", () => {
     expect(eventBus.published.map((event) => event.type)).toEqual(["runtime.ttl.extended"]);
   });
 
+  test("compensates deployment when service creation fails", async () => {
+    const eventBus = new InMemoryRuntimeEventBus();
+    const store = new InMemoryRuntimeStore();
+    const workload = new ServiceFailingWorkloadAdapter();
+    const commandService = new RuntimeCommandService({
+      clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
+      cluster: "default",
+      eventBus,
+      namespace: "agent-runtime",
+      runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
+      runtimePort: 4096,
+      scenes: { coding: "/nas/agent-control/scenes/coding" },
+      store,
+      ttlSeconds: 3600,
+      workload,
+      workdirRoot: "/nas/agent-control/users",
+    });
+
+    await expect(commandService.createRuntime({ userId: "user-a" })).rejects.toThrow("service creation failed");
+
+    expect(workload.deletedDeployments).toEqual(["opencode-rt-000001"]);
+    expect(eventBus.published.map((event) => event.type)).toContain("runtime.failed");
+  });
+
   test("deletes runtime by emitting terminating and terminated events", async () => {
     const { commandService, eventBus, queryService, workload } = buildServices();
     const runtime = await commandService.createRuntime({ userId: "user-a" });
@@ -173,3 +201,35 @@ describe("Runtime application services", () => {
     expect(eventBus.published.map((event) => event.type)).toEqual(["runtime.ttl.extended"]);
   });
 });
+
+class ServiceFailingWorkloadAdapter implements RuntimeWorkloadPort {
+  readonly deletedDeployments: string[] = [];
+
+  async checkCapacity(): Promise<{ allowed: boolean }> {
+    return { allowed: true };
+  }
+
+  async createDeployment(_spec: RuntimeWorkloadSpec): Promise<void> {
+    return;
+  }
+
+  async createService(_spec: RuntimeWorkloadSpec): Promise<void> {
+    throw new Error("service creation failed");
+  }
+
+  async waitUntilReady(_snapshot: RuntimeSnapshot): Promise<void> {
+    return;
+  }
+
+  async restartDeployment(_snapshot: RuntimeSnapshot): Promise<void> {
+    return;
+  }
+
+  async deleteDeployment(snapshot: RuntimeSnapshot): Promise<void> {
+    this.deletedDeployments.push(snapshot.deploymentName);
+  }
+
+  async deleteService(_snapshot: RuntimeSnapshot): Promise<void> {
+    return;
+  }
+}

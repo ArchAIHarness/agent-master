@@ -3,6 +3,10 @@ import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../ports/runti
 
 export class FakeRuntimeWorkloadAdapter implements RuntimeWorkloadPort {
   readonly createdDeployments: RuntimeWorkloadSpec[] = [];
+
+  async checkCapacity(): Promise<{ allowed: boolean }> {
+    return { allowed: true };
+  }
   readonly createdServices: RuntimeWorkloadSpec[] = [];
   readonly readyRuntimes: string[] = [];
   readonly restartedDeployments: string[] = [];

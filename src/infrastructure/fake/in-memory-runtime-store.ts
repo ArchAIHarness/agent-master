@@ -9,6 +9,14 @@ export class InMemoryRuntimeStore implements RuntimeStore {
     return snapshot ? cloneSnapshot(snapshot) : null;
   }
 
+  async tryCreateForUser(snapshot: RuntimeSnapshot, _ttlSeconds: number): Promise<boolean> {
+    if (this.runtimes.has(snapshot.userId)) {
+      return false;
+    }
+    this.runtimes.set(snapshot.userId, cloneSnapshot(snapshot));
+    return true;
+  }
+
   async save(snapshot: RuntimeSnapshot): Promise<void> {
     this.runtimes.set(snapshot.userId, cloneSnapshot(snapshot));
   }

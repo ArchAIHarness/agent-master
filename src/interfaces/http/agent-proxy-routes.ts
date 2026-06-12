@@ -34,6 +34,22 @@ export async function registerAgentProxyRoutes(app: FastifyInstance, dependencie
       for (const [name, value] of Object.entries(response.headers)) {
         reply.header(name, value);
       }
+      if (response.isEventStream && response.stream) {
+        reply.raw.writeHead(response.statusCode, response.headers);
+        const reader = response.stream.getReader();
+        request.raw.once("close", () => {
+          void reader.cancel();
+        });
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) {
+            break;
+          }
+          reply.raw.write(chunk.value);
+        }
+        reply.raw.end();
+        return reply;
+      }
       return reply.code(response.statusCode).send(response.body);
     } catch (error) {
       if (stopSseLeaseRenewal && !sseLeaseRenewalAttachedToClose) {

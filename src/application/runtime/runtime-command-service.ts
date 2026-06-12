@@ -8,7 +8,9 @@ import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../ports/runti
 
 export interface RuntimeCommandServiceDependencies {
   readonly clock: RuntimeClock;
+  readonly cluster: string;
   readonly eventBus: RuntimeEventBus;
+  readonly namespace: string;
   readonly runtimeImage: string;
   readonly runtimePort: number;
   readonly scenes: RuntimeSceneRegistry;
@@ -32,8 +34,8 @@ export class RuntimeCommandService {
     }
 
     const runtime = RuntimeAggregate.create({
-      cluster: "default",
-      namespace: "agent-runtime",
+      cluster: this.dependencies.cluster,
+      namespace: this.dependencies.namespace,
       now: this.dependencies.clock.now(),
       runtimeId: this.nextRuntimeId(),
       servicePort: this.dependencies.runtimePort,
@@ -42,28 +44,56 @@ export class RuntimeCommandService {
       workspaceRootPath: buildRuntimeWorkspaceRoot(this.dependencies.workdirRoot, input.userId),
     });
     await this.publish(runtime);
+    const reserved = await this.dependencies.store.tryCreateForUser(runtime.snapshot(), this.dependencies.ttlSeconds);
+    if (!reserved) {
+      const current = await this.dependencies.store.getByUserId(input.userId);
+      if (current) {
+        return current;
+      }
+      throw new Error(`runtime for user ${input.userId} is being created`);
+    }
 
-    runtime.markScheduled();
-    await this.publish(runtime);
+    let deploymentCreated = false;
+    let serviceCreated = false;
+    try {
+      runtime.markScheduled();
+      await this.publish(runtime);
 
-    const spec = this.buildWorkloadSpec(runtime.snapshot());
-    await this.dependencies.workload.createDeployment(spec);
-    runtime.markDeploymentCreated();
-    await this.publish(runtime);
+      const capacity = await this.dependencies.workload.checkCapacity({
+        cluster: this.dependencies.cluster,
+        namespace: this.dependencies.namespace,
+      });
+      if (!capacity.allowed) {
+        throw new Error(capacity.reason ?? "runtime capacity check failed");
+      }
 
-    await this.dependencies.workload.createService(spec);
-    runtime.markServiceCreated();
-    await this.publish(runtime);
+      const spec = this.buildWorkloadSpec(runtime.snapshot());
+      await this.dependencies.workload.createDeployment(spec);
+      deploymentCreated = true;
+      runtime.markDeploymentCreated();
+      await this.publish(runtime);
 
-    await this.dependencies.workload.waitUntilReady(runtime.snapshot());
-    runtime.markPodReady();
-    await this.publish(runtime);
+      await this.dependencies.workload.createService(spec);
+      serviceCreated = true;
+      runtime.markServiceCreated();
+      await this.publish(runtime);
 
-    runtime.markRunning();
-    await this.publish(runtime);
+      await this.dependencies.workload.waitUntilReady(runtime.snapshot());
+      runtime.markPodReady();
+      await this.publish(runtime);
 
-    await this.extendLeaseAndPersist(runtime);
-    return runtime.snapshot();
+      runtime.markRunning();
+      await this.publish(runtime);
+
+      await this.extendLeaseAndPersist(runtime);
+      return runtime.snapshot();
+    } catch (error) {
+      runtime.markFailed(error instanceof Error ? error.message : "runtime creation failed");
+      await this.publish(runtime);
+      await this.compensateCreateFailure(runtime.snapshot(), { deploymentCreated, serviceCreated });
+      await this.dependencies.store.deleteByUserId(input.userId).catch(() => undefined);
+      throw error;
+    }
   }
 
   async restartRuntime(input: { userId: string; reason?: string }): Promise<RuntimeSnapshot> {
@@ -97,6 +127,18 @@ export class RuntimeCommandService {
     runtime.markTerminated();
     await this.publish(runtime);
     await this.dependencies.store.deleteByUserId(input.userId);
+  }
+
+  private async compensateCreateFailure(
+    snapshot: RuntimeSnapshot,
+    created: { deploymentCreated: boolean; serviceCreated: boolean },
+  ): Promise<void> {
+    if (created.serviceCreated) {
+      await this.dependencies.workload.deleteService(snapshot).catch(() => undefined);
+    }
+    if (created.deploymentCreated) {
+      await this.dependencies.workload.deleteDeployment(snapshot).catch(() => undefined);
+    }
   }
 
   private async requireRuntime(userId: string): Promise<RuntimeSnapshot> {

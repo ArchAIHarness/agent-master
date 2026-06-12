@@ -11,6 +11,12 @@ export class MissingUserIdError extends RuntimeDomainError {
   }
 }
 
+export class InvalidUserIdError extends RuntimeDomainError {
+  constructor() {
+    super("x-user-id contains unsafe characters");
+  }
+}
+
 export class RuntimeNotFoundError extends RuntimeDomainError {
   constructor(userId: string) {
     super(`runtime for user ${userId} was not found`);

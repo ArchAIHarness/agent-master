@@ -13,6 +13,7 @@
   "dependencies": {
     "@fastify/sensible": "latest",
     "fastify": "latest",
+    "ioredis": "^5.11.1",
     "zod": "latest"
   },
   "devDependencies": {

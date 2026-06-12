@@ -22,7 +22,9 @@ function buildRuntimeApp() {
     },
     runtime: {
       clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
+      cluster: "default",
       eventBus,
+      namespace: "agent-runtime",
       proxy,
       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
       runtimePort: 4096,
@@ -40,6 +42,20 @@ function buildRuntimeApp() {
 }
 
 describe("runtime HTTP API", () => {
+  test("rejects unsafe x-user-id before building NAS path", async () => {
+    const { app } = buildRuntimeApp();
+
+    const response = await app.inject({
+      headers: { "x-user-id": "../../other" },
+      method: "POST",
+      url: "/api/v1/runtime",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: "INVALID_USER_ID" });
+    await app.close();
+  });
+
   test("rejects runtime creation without x-user-id", async () => {
     const { app } = buildRuntimeApp();
 

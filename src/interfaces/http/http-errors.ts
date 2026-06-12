@@ -1,4 +1,4 @@
-import { MissingUserIdError, RuntimeNotFoundError, UnknownRuntimeSceneError } from "../../domain/runtime/runtime-errors";
+import { InvalidUserIdError, MissingUserIdError, RuntimeNotFoundError, UnknownRuntimeSceneError } from "../../domain/runtime/runtime-errors";
 
 export interface HttpErrorResponse {
   readonly code: string;
@@ -9,6 +9,13 @@ export function mapErrorToStatus(error: unknown): { statusCode: number; body: Ht
   if (error instanceof MissingUserIdError) {
     return {
       body: { code: "MISSING_USER_ID", message: error.message },
+      statusCode: 400,
+    };
+  }
+
+  if (error instanceof InvalidUserIdError) {
+    return {
+      body: { code: "INVALID_USER_ID", message: error.message },
       statusCode: 400,
     };
   }

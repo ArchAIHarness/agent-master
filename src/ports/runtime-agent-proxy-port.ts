@@ -15,7 +15,9 @@ export interface RuntimeProxyRequest {
 export interface RuntimeProxyResponse {
   readonly statusCode: number;
   readonly headers: RuntimeProxyHeaders;
-  readonly body: unknown;
+  readonly body?: unknown;
+  readonly stream?: ReadableStream<Uint8Array>;
+  readonly isEventStream?: boolean;
 }
 
 export interface RuntimeAgentProxyPort {
