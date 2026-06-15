@@ -127,7 +127,7 @@ export class KubernetesRestWorkloadAdapter implements RuntimeWorkloadPort {
           template: {
             metadata: {
               annotations: {
-                "agent-control/restartedAt": new Date().toISOString(),
+                "agent-master/restartedAt": new Date().toISOString(),
               },
             },
           },
@@ -354,7 +354,7 @@ function isDeploymentReady(value: unknown): boolean {
 }
 
 function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
-  const sceneMounts = buildSceneVolumeMounts(spec.scenes);
+  const sceneSourceMounts = buildSceneSourceVolumeMounts(spec.scenes);
   return {
     apiVersion: "apps/v1",
     kind: "Deployment",
@@ -369,6 +369,7 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
       template: {
         metadata: { labels: spec.runtime.podSelector },
         spec: {
+          terminationGracePeriodSeconds: 60,
           initContainers: [
             {
               command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand(spec.scenes)],
@@ -379,16 +380,24 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
                   mountPath: "/app",
                   name: "user-workdir",
                 },
+                ...sceneSourceMounts,
               ],
             },
           ],
           containers: [
             {
-              args: ["web", "--port", String(spec.runtime.targetPort), "--hostname", "0.0.0.0"],
-              command: ["opencode"],
+              args: [buildOpenCodeStartupCommand(spec.runtime.targetPort)],
+              command: ["/bin/sh", "-c"],
               image: spec.image,
               name: "opencode-runtime",
               ports: [{ containerPort: spec.runtime.targetPort, name: "http" }],
+              lifecycle: {
+                preStop: {
+                  exec: {
+                    command: ["/bin/sh", "-c", "sleep 5"],
+                  },
+                },
+              },
               resources: {
                 limits: {
                   cpu: runtimeResourceLimit.cpuText,
@@ -404,7 +413,14 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
                   mountPath: "/app",
                   name: "user-workdir",
                 },
-                ...sceneMounts,
+                {
+                  mountPath: "/root/.local/share/opencode",
+                  name: "opencode-share",
+                },
+                {
+                  mountPath: "/root/.config/opencode",
+                  name: "opencode-config",
+                },
               ],
             },
           ],
@@ -416,6 +432,20 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
               },
               name: "user-workdir",
             },
+            {
+              hostPath: {
+                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/share`,
+                type: "DirectoryOrCreate",
+              },
+              name: "opencode-share",
+            },
+            {
+              hostPath: {
+                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/config`,
+                type: "DirectoryOrCreate",
+              },
+              name: "opencode-config",
+            },
             ...buildSceneVolumes(spec.scenes),
           ],
         },
@@ -425,12 +455,42 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
 }
 
 function buildPrepareUserWorkdirCommand(scenes: RuntimeSceneRegistry): string {
-  const sceneDirectories = Object.keys(scenes).map((scene) => `/app/${scene}`);
-  return ["mkdir -p /app/.opencode", ...sceneDirectories.map((scenePath) => `mkdir -p ${quoteShellArg(scenePath)}`), "touch /app/AGENTS.md"].join(" && ");
+  const commands = [
+    "mkdir -p /app/.opencode",
+    "touch /app/AGENTS.md",
+    "mkdir -p /app/.runtime/opencode/share",
+    "mkdir -p /app/.runtime/opencode/config",
+  ];
+  for (const scene of Object.keys(scenes)) {
+    const scenePath = `/app/${scene}`;
+    const sceneSourcePath = `/scene-config/${scene}`;
+    commands.push(`mkdir -p ${quoteShellArg(scenePath)}`);
+    commands.push(`mkdir -p ${quoteShellArg(`${scenePath}/.opencode`)}`);
+    commands.push(`cp ${quoteShellArg(`${sceneSourcePath}/AGENTS.md`)} ${quoteShellArg(`${scenePath}/AGENTS.md`)}`);
+    commands.push(`cp -R ${quoteShellArg(`${sceneSourcePath}/.opencode/.`)} ${quoteShellArg(`${scenePath}/.opencode/`)}`);
+  }
+  return commands.join(" && ");
 }
 
 function quoteShellArg(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function buildOpenCodeStartupCommand(targetPort: number): string {
+  const command = `opencode web --port ${targetPort} --hostname 0.0.0.0`;
+  return [
+    "set -u",
+    `${command}`,
+    "status=$?",
+    "if [ $status -eq 0 ] || [ $status -eq 130 ] || [ $status -eq 143 ]; then exit $status; fi",
+    "stamp=$(date +%Y%m%d%H%M%S)",
+    "mkdir -p /root/.config/opencode/.quarantine",
+    "mkdir -p /root/.config/opencode/.recovered",
+    "for item in /root/.config/opencode/* /root/.config/opencode/.[!.]* /root/.config/opencode/..?*; do [ -e \"$item\" ] || continue; name=$(basename \"$item\"); [ \"$name\" = \".quarantine\" ] && continue; [ \"$name\" = \".recovered\" ] && continue; mv \"$item\" /root/.config/opencode/.quarantine/\"$stamp-$name\"; done",
+    "echo '{}' > /root/.config/opencode/opencode.jsonc",
+    "echo \"OpenCode config was quarantined after startup failure $status; retrying with minimal config\" >&2",
+    `${command}`,
+  ].join("; ");
 }
 
 function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
@@ -456,39 +516,22 @@ function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
   };
 }
 
-function buildSceneVolumeMounts(scenes: RuntimeSceneRegistry): unknown[] {
-  return Object.keys(scenes).flatMap((scene) => [
-    {
-      mountPath: `/app/${scene}/AGENTS.md`,
-      name: `scene-${scene}-agents`,
-      readOnly: true,
-      subPath: "AGENTS.md",
-    },
-    {
-      mountPath: `/app/${scene}/.opencode`,
-      name: `scene-${scene}-opencode`,
-      readOnly: true,
-    },
-  ]);
+function buildSceneSourceVolumeMounts(scenes: RuntimeSceneRegistry): unknown[] {
+  return Object.keys(scenes).map((scene) => ({
+    mountPath: `/scene-config/${scene}`,
+    name: `scene-${scene}-source`,
+    readOnly: true,
+  }));
 }
 
 function buildSceneVolumes(scenes: RuntimeSceneRegistry): unknown[] {
-  return Object.entries(scenes).flatMap(([scene, path]) => [
-    {
-      hostPath: {
-        path: `${path}/AGENTS.md`,
-        type: "File",
-      },
-      name: `scene-${scene}-agents`,
+  return Object.entries(scenes).map(([scene, path]) => ({
+    hostPath: {
+      path,
+      type: "Directory",
     },
-    {
-      hostPath: {
-        path: `${path}/.opencode`,
-        type: "Directory",
-      },
-      name: `scene-${scene}-opencode`,
-    },
-  ]);
+    name: `scene-${scene}-source`,
+  }));
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

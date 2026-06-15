@@ -5,8 +5,8 @@ import { RuntimeNotRunningError, UnknownRuntimeSceneError } from "../src/domain/
 import type { RuntimeSceneRegistry } from "../src/domain/runtime/runtime-policy";
 
 const scenes: RuntimeSceneRegistry = {
-  coding: "/nas/agent-control/scenes/coding",
-  review: "/nas/agent-control/scenes/review",
+  coding: "/nas/agent-master/scenes/coding",
+  review: "/nas/agent-master/scenes/review",
 };
 
 describe("RuntimeAggregate", () => {
@@ -18,7 +18,7 @@ describe("RuntimeAggregate", () => {
       servicePort: 4096,
       targetPort: 4096,
       userId: "user-a",
-      workspaceRootPath: "/nas/agent-control/users/user-a",
+      workspaceRootPath: "/nas/agent-master/users/user-a",
     });
 
     runtime.markScheduled();
@@ -35,7 +35,7 @@ describe("RuntimeAggregate", () => {
       serviceName: "opencode-rt-abc123",
       servicePort: 4096,
       targetPort: 4096,
-      workspaceRootPath: "/nas/agent-control/users/user-a",
+      workspaceRootPath: "/nas/agent-master/users/user-a",
     });
     expect(runtime.pullEvents().map((event) => event.type)).toEqual([
       "runtime.creating",
@@ -55,7 +55,7 @@ describe("RuntimeAggregate", () => {
       servicePort: 4096,
       targetPort: 4096,
       userId: "user-delete",
-      workspaceRootPath: "/nas/agent-control/users/user-delete",
+      workspaceRootPath: "/nas/agent-master/users/user-delete",
     });
     runtime.markRunning();
     runtime.pullEvents();
@@ -78,7 +78,7 @@ describe("RuntimeAggregate", () => {
       servicePort: 4096,
       targetPort: 4096,
       userId: "user-pending",
-      workspaceRootPath: "/nas/agent-control/users/user-pending",
+      workspaceRootPath: "/nas/agent-master/users/user-pending",
     });
 
     expect(() => runtime.markRestarting("reload-opencode-config")).toThrow(RuntimeNotRunningError);

@@ -18,8 +18,8 @@ function buildServices() {
   const workload = new FakeRuntimeWorkloadAdapter();
   const clock = new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z"));
   const scenes = {
-    coding: "/nas/agent-control/scenes/coding",
-    review: "/nas/agent-control/scenes/review",
+    coding: "/nas/agent-master/scenes/coding",
+    review: "/nas/agent-master/scenes/review",
   };
   const commandService = new RuntimeCommandService({
     clock,
@@ -32,7 +32,7 @@ function buildServices() {
     store,
     ttlSeconds: 3600,
     workload,
-    workdirRoot: "/nas/agent-control/users",
+    workdirRoot: "/nas/agent-master/users",
   });
   const queryService = new RuntimeQueryService({ store });
   const agentProxy = new FakeRuntimeAgentProxy();
@@ -145,11 +145,11 @@ describe("Runtime application services", () => {
       namespace: "agent-runtime",
       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
       runtimePort: 4096,
-      scenes: { coding: "/nas/agent-control/scenes/coding" },
+      scenes: { coding: "/nas/agent-master/scenes/coding" },
       store,
       ttlSeconds: 3600,
       workload,
-      workdirRoot: "/nas/agent-control/users",
+      workdirRoot: "/nas/agent-master/users",
     });
 
     await expect(commandService.createRuntime({ userId: "user-a" })).rejects.toThrow("service creation failed");

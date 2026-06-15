@@ -1,4 +1,4 @@
-# agent-control runtime configuration template.
+# agent-master runtime configuration template.
 # Do not put kubeconfig, Token, Cookie, password, certificate, private key, or real secret here.
 # Sensitive values must be provided by Kubernetes ServiceAccount, Secret, mounted files,
 # environment variables, or an external controlled configuration system.
@@ -25,13 +25,13 @@ runtime:
   ttl: 3600
   timeout: 60000
   port: 4096
-  workdir: /nas/agent-control/users
+  workdir: /nas/agent-master/users
   scenes:
-    coding: /nas/agent-control/scenes/coding
-    review: /nas/agent-control/scenes/review
+    coding: /nas/agent-master/scenes/coding
+    review: /nas/agent-master/scenes/review
 
 nas:
-  path: /nas/agent-control
+  path: /nas/agent-master
 
 kubernetes:
   cluster: default

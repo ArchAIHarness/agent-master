@@ -3,31 +3,33 @@ import { describe, expect, test } from "bun:test";
 import { buildApp } from "../src/app";
 
 interface ServiceStatusResponse {
-  service: "agent-control";
+  service: "agent-master";
   status: "ok";
 }
 
 describe("health endpoints", () => {
-  test("GET /health returns service status", async () => {
+  test("GET /api/v1/health returns service status", async () => {
     const app = buildApp();
 
-    const response = await app.inject({ method: "GET", url: "/health" });
+    const response = await app.inject({ method: "GET", url: "/api/v1/health" });
 
     expect(response.statusCode).toBe(200);
     expect(response.json<ServiceStatusResponse>()).toEqual({
-      service: "agent-control",
+      service: "agent-master",
       status: "ok",
     });
 
     await app.close();
   });
 
-  test("GET /ready is not exposed", async () => {
+  test("legacy health and ready paths are not exposed", async () => {
     const app = buildApp();
 
-    const response = await app.inject({ method: "GET", url: "/ready" });
+    const healthResponse = await app.inject({ method: "GET", url: "/health" });
+    const readyResponse = await app.inject({ method: "GET", url: "/ready" });
 
-    expect(response.statusCode).toBe(404);
+    expect(healthResponse.statusCode).toBe(404);
+    expect(readyResponse.statusCode).toBe(404);
 
     await app.close();
   });

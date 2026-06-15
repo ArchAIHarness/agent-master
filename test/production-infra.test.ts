@@ -25,7 +25,7 @@ const runtime: RuntimeSnapshot = {
   targetPort: 4096,
   updatedAt: "2026-06-12T00:00:00.000Z",
   userId: "user-a",
-  workspaceRootPath: "/nas/agent-control/users/user-a",
+  workspaceRootPath: "/nas/agent-master/users/user-a",
 };
 
 describe("production config", () => {
@@ -46,11 +46,11 @@ runtime:
   ttl: 3600
   timeout: 60000
   port: 4096
-  workdir: /nas/agent-control/users
+  workdir: /nas/agent-master/users
   scenes:
-    coding: /nas/agent-control/scenes/coding
+    coding: /nas/agent-master/scenes/coding
 nas:
-  path: /nas/agent-control
+  path: /nas/agent-master
 kubernetes:
   cluster: default
   namespace: agent-runtime
@@ -70,7 +70,7 @@ kubernetes:
       password: "",
       port: 6379,
     });
-    expect(config.runtime.scenes).toEqual({ coding: "/nas/agent-control/scenes/coding" });
+    expect(config.runtime.scenes).toEqual({ coding: "/nas/agent-master/scenes/coding" });
   });
 });
 
@@ -185,29 +185,47 @@ describe("KubernetesRestWorkloadAdapter", () => {
       "DELETE /apis/apps/v1/namespaces/agent-runtime/deployments/opencode-rt-000001",
       "DELETE /api/v1/namespaces/agent-runtime/services/opencode-rt-000001",
     ]);
-    expect(http.requests[0]?.body).toMatchObject({
-      kind: "Deployment",
-      spec: {
-        replicas: 1,
-        template: {
-          spec: {
-            initContainers: [
-              {
-                command: ["/bin/sh", "-c", "mkdir -p /app/.opencode && mkdir -p '/app/coding' && touch /app/AGENTS.md"],
-                name: "prepare-user-workdir",
-              },
-            ],
-          },
-        },
-      },
-    });
+    const deployment = http.requests[0]?.body as Record<string, any>;
+    const podSpec = deployment.spec.template.spec;
+    const initContainer = podSpec.initContainers[0];
+    const runtimeContainer = podSpec.containers[0];
+    const initCommand = initContainer.command[2] as string;
+
+    expect(deployment).toMatchObject({ kind: "Deployment", spec: { replicas: 1 } });
     expect(http.requests[3]?.contentType).toBe("application/strategic-merge-patch+json");
-    expect(JSON.stringify(http.requests[0]?.body)).toContain("/app/coding/AGENTS.md");
-    expect(JSON.stringify(http.requests[0]?.body)).toContain('"subPath":"AGENTS.md"');
-    expect(JSON.stringify(http.requests[0]?.body)).toContain('"type":"File"');
-    expect(JSON.stringify(http.requests[0]?.body)).toContain('"type":"Directory"');
-    expect(JSON.stringify(http.requests[0]?.body)).toContain('"requests":{"cpu":"100m","memory":"512Mi"}');
-    expect(JSON.stringify(http.requests[0]?.body)).toContain('"limits":{"cpu":"500m","memory":"1Gi"}');
+    expect(initContainer).toMatchObject({ name: "prepare-user-workdir" });
+    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/share");
+    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/config");
+    expect(initCommand).toContain("cp '/scene-config/coding/AGENTS.md' '/app/coding/AGENTS.md'");
+    expect(initCommand).toContain("cp -R '/scene-config/coding/.opencode/.' '/app/coding/.opencode/'");
+    expect(runtimeContainer.command).toEqual(["/bin/sh", "-c"]);
+    expect(runtimeContainer.args[0]).toContain("opencode web --port 4096 --hostname 0.0.0.0");
+    expect(runtimeContainer.args[0]).toContain("quarantine");
+    expect(runtimeContainer.volumeMounts).toEqual(
+      expect.arrayContaining([
+        { mountPath: "/app", name: "user-workdir" },
+        { mountPath: "/root/.local/share/opencode", name: "opencode-share" },
+        { mountPath: "/root/.config/opencode", name: "opencode-config" },
+      ]),
+    );
+    expect(podSpec.volumes).toEqual(
+      expect.arrayContaining([
+        { hostPath: { path: "/nas/agent-master/users/user-a", type: "DirectoryOrCreate" }, name: "user-workdir" },
+        { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/share", type: "DirectoryOrCreate" }, name: "opencode-share" },
+        { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/config", type: "DirectoryOrCreate" }, name: "opencode-config" },
+        { hostPath: { path: "/nas/scenes/coding", type: "Directory" }, name: "scene-coding-source" },
+      ]),
+    );
+    expect(podSpec.terminationGracePeriodSeconds).toBe(60);
+    expect(runtimeContainer.lifecycle.preStop.exec.command).toEqual(["/bin/sh", "-c", "sleep 5"]);
+    expect(initContainer.volumeMounts).toContainEqual({ mountPath: "/scene-config/coding", name: "scene-coding-source", readOnly: true });
+    expect(runtimeContainer.volumeMounts).not.toContainEqual(expect.objectContaining({ name: "scene-coding-source" }));
+    expect(JSON.stringify(deployment)).not.toContain("scene-coding-agents");
+    expect(JSON.stringify(deployment)).not.toContain("/nas/agent-master/users/user-a/.runtime/instances");
+    expect(runtimeContainer.resources).toMatchObject({
+      limits: { cpu: "500m", memory: "1Gi" },
+      requests: { cpu: "100m", memory: "512Mi" },
+    });
   });
 });
 
@@ -239,6 +257,32 @@ describe("RuntimeServiceFetchProxy", () => {
     expect(response.isEventStream).toBe(true);
     expect(response.stream).toBeDefined();
     expect(response.body).toBeUndefined();
+  });
+
+  test("removes encoded body headers after parsing proxied JSON response", async () => {
+    const proxy = new RuntimeServiceFetchProxy({
+      fetch: async () =>
+        new Response(JSON.stringify([{ ok: true }]), {
+          headers: { "Content-Encoding": "gzip", "Content-Length": "999", "Content-Type": "application/json", "Transfer-Encoding": "chunked" },
+          status: 200,
+        }),
+      namespace: "agent-runtime",
+    });
+
+    const response = await proxy.forward({
+      headers: { "accept-encoding": "gzip", "x-user-id": "user-a" },
+      method: "GET",
+      path: "/session",
+      query: {},
+      serviceName: "opencode-rt-000001",
+      servicePort: 4096,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual([{ ok: true }]);
+    expect(Object.keys(response.headers).map((key) => key.toLowerCase())).not.toContain("content-encoding");
+    expect(Object.keys(response.headers).map((key) => key.toLowerCase())).not.toContain("content-length");
+    expect(Object.keys(response.headers).map((key) => key.toLowerCase())).not.toContain("transfer-encoding");
   });
 
   test("forwards request to runtime service and strips authorization", async () => {
@@ -290,11 +334,11 @@ runtime:
   ttl: 3600
   timeout: 60000
   port: 4096
-  workdir: /nas/agent-control/users
+  workdir: /nas/agent-master/users
   scenes:
-    coding: /nas/agent-control/scenes/coding
+    coding: /nas/agent-master/scenes/coding
 nas:
-  path: /nas/agent-control
+  path: /nas/agent-master
 kubernetes:
   cluster: default
   namespace: agent-runtime
@@ -311,7 +355,7 @@ kubernetes:
     });
 
     expect(dependencies.runtimePort).toBe(4096);
-    expect(dependencies.scenes).toEqual({ coding: "/nas/agent-control/scenes/coding" });
+    expect(dependencies.scenes).toEqual({ coding: "/nas/agent-master/scenes/coding" });
     expect(await dependencies.workload.checkCapacity({ cluster: "default", namespace: "agent-runtime" })).toMatchObject({
       allowed: true,
     });
@@ -335,11 +379,11 @@ runtime:
   ttl: 3600
   timeout: 60000
   port: 4096
-  workdir: /nas/agent-control/users
+  workdir: /nas/agent-master/users
   scenes:
-    coding: /nas/agent-control/scenes/coding
+    coding: /nas/agent-master/scenes/coding
 nas:
-  path: /nas/agent-control
+  path: /nas/agent-master
 kubernetes:
   cluster: default
   namespace: agent-runtime

@@ -9,6 +9,6 @@ const app = buildApp({ config, runtime });
 try {
   await app.listen({ host: config.host, port: config.port });
 } catch (error) {
-  app.log.error({ error }, "failed to start agent-control");
+  app.log.error({ error }, "failed to start agent-master");
   process.exit(1);
 }

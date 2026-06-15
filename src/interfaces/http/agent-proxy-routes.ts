@@ -31,11 +31,12 @@ export async function registerAgentProxyRoutes(app: FastifyInstance, dependencie
         query: normalizeQueryFromUrl(request.url),
         userId,
       });
-      for (const [name, value] of Object.entries(response.headers)) {
+      const responseHeaders = response.isEventStream ? response.headers : stripDecodedBodyHeaders(response.headers);
+      for (const [name, value] of Object.entries(responseHeaders)) {
         reply.header(name, value);
       }
       if (response.isEventStream && response.stream) {
-        reply.raw.writeHead(response.statusCode, response.headers);
+        reply.raw.writeHead(response.statusCode, responseHeaders);
         const reader = response.stream.getReader();
         request.raw.once("close", () => {
           void reader.cancel();
@@ -62,6 +63,17 @@ export async function registerAgentProxyRoutes(app: FastifyInstance, dependencie
       return reply.code(mapped.statusCode).send(mapped.body);
     }
   });
+}
+
+function stripDecodedBodyHeaders(headers: Record<string, string>): Record<string, string> {
+  const decodedHeaders: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (["content-encoding", "content-length", "transfer-encoding"].includes(key.toLowerCase())) {
+      continue;
+    }
+    decodedHeaders[key] = value;
+  }
+  return decodedHeaders;
 }
 
 function normalizeHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
