@@ -674,7 +674,14 @@ describe("runtime HTTP API", () => {
     const { app, proxy } = buildRuntimeApp();
     await app.inject({ headers: { "x-user-id": "user-a" }, method: "POST", url: "/api/v1/runtime" });
     proxy.enqueueResponse({ body: { success: true }, headers: { "content-type": "application/json" }, statusCode: 200 });
-    proxy.enqueueResponse({ body: [{ name: "AGENTS.md", path: "/app/coding/AGENTS.md", type: "file" }], headers: { "content-type": "application/json" }, statusCode: 200 });
+    proxy.enqueueResponse({
+      body: [
+        { absolute: "/app/.runtime", name: ".runtime", path: ".runtime/", type: "directory" },
+        { absolute: "/app/coding/AGENTS.md", name: "AGENTS.md", path: "AGENTS.md", type: "file" },
+      ],
+      headers: { "content-type": "application/json" },
+      statusCode: 200,
+    });
     proxy.enqueueResponse({ body: { content: "# AGENTS", type: "text" }, headers: { "content-type": "application/json" }, statusCode: 200 });
     proxy.enqueueResponse({ body: [{ file: "README.md", status: "modified" }], headers: { "content-type": "application/json" }, statusCode: 200 });
 
@@ -687,6 +694,9 @@ describe("runtime HTTP API", () => {
     expect(filesResponse.statusCode).toBe(200);
     expect(contentResponse.statusCode).toBe(200);
     expect(statusResponse.statusCode).toBe(200);
+    expect(JSON.parse(filesResponse.body)).toEqual([
+      { absolute: "/app/coding/AGENTS.md", name: "AGENTS.md", path: "AGENTS.md", type: "file" },
+    ]);
     expect(proxy.requests.map((request) => request.path)).toEqual([
       "/session/ses-1/command",
       "/file",

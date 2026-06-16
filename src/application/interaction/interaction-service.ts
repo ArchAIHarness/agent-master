@@ -109,7 +109,8 @@ export class InteractionService {
   }
 
   async listFiles(input: { userId: string; path: string }): Promise<InteractionFileEntry[]> {
-    return this.getDefaultAgentApp().listFiles({ ...input, path: assertSafeWorkspacePath(input.path) });
+    const files = await this.getDefaultAgentApp().listFiles({ ...input, path: assertSafeWorkspacePath(input.path) });
+    return files.filter((file) => isSafeWorkspaceFileEntry(file));
   }
 
   async getFileContent(input: { userId: string; path: string }): Promise<InteractionFileContent> {
@@ -218,6 +219,11 @@ function assertSafeWorkspacePath(path: string): string {
     throw new InvalidInteractionFilePathError(path);
   }
   return path;
+}
+
+function isSafeWorkspaceFileEntry(file: InteractionFileEntry): boolean {
+  const absolute = "absolute" in file && typeof file.absolute === "string" ? file.absolute : undefined;
+  return !(file.path === ".runtime" || file.path.startsWith(".runtime/") || absolute === "/app/.runtime" || absolute?.startsWith("/app/.runtime/"));
 }
 
 function parentPath(path: string): string {
