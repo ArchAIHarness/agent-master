@@ -1,4 +1,4 @@
-import type { RuntimeSceneRegistry } from "../domain/runtime/runtime-policy";
+import type { RuntimeAgentPresetRegistry } from "../domain/runtime/runtime-policy";
 import type { RuntimeClock } from "./runtime-clock";
 import type { RuntimeEventBus } from "./runtime-event-bus";
 import type { RuntimeAgentProxyPort } from "./runtime-agent-proxy-port";
@@ -13,7 +13,7 @@ export interface RuntimeDependenciesOptions {
   readonly proxy: RuntimeAgentProxyPort;
   readonly runtimeImage: string;
   readonly runtimePort: number;
-  readonly scenes: RuntimeSceneRegistry;
+  readonly agentPresets: RuntimeAgentPresetRegistry;
   readonly store: RuntimeStore;
   readonly ttlSeconds: number;
   readonly workload: RuntimeWorkloadPort;

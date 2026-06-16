@@ -19,7 +19,7 @@ const productionConfigSchema = z.object({
     timeout: z.number().int().positive(),
     port: z.number().int().min(1).max(65_535),
     workdir: z.string().min(1),
-    scenes: z.record(z.string().min(1), z.string().min(1)),
+    agentPresets: z.record(z.string().min(1), z.string().min(1)),
   }),
   nas: z.object({
     path: z.string().min(1),

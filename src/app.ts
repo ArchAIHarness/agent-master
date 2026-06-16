@@ -46,7 +46,6 @@ function registerRuntimeModules(app: FastifyInstance, runtimeDependencies: Runti
     clock: runtimeDependencies.clock,
     eventBus: runtimeDependencies.eventBus,
     proxy: runtimeDependencies.proxy,
-    scenes: runtimeDependencies.scenes,
     store: runtimeDependencies.store,
     ttlSeconds: runtimeDependencies.ttlSeconds,
   });

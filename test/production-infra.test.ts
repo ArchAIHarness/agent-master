@@ -47,8 +47,8 @@ runtime:
   timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  scenes:
-    coding: /nas/agent-master/scenes/coding
+  agentPresets:
+    coding: /nas/agent-master/agent-presets/coding
 nas:
   path: /nas/agent-master
 kubernetes:
@@ -70,7 +70,7 @@ kubernetes:
       password: "",
       port: 6379,
     });
-    expect(config.runtime.scenes).toEqual({ coding: "/nas/agent-master/scenes/coding" });
+    expect(config.runtime.agentPresets).toEqual({ coding: "/nas/agent-master/agent-presets/coding" });
   });
 });
 
@@ -170,8 +170,8 @@ describe("KubernetesRestWorkloadAdapter", () => {
     const http = new RecordingKubernetesHttpClient();
     const adapter = new KubernetesRestWorkloadAdapter({ http });
 
-    await adapter.createDeployment({ image: "agent-runtime:local", runtime, scenes: { coding: "/nas/scenes/coding" } });
-    await adapter.createService({ image: "agent-runtime:local", runtime, scenes: { coding: "/nas/scenes/coding" } });
+    await adapter.createDeployment({ agentPresets: { coding: "/nas/agent-presets/coding" }, image: "agent-runtime:local", runtime });
+    await adapter.createService({ agentPresets: { coding: "/nas/agent-presets/coding" }, image: "agent-runtime:local", runtime });
     await adapter.waitUntilReady(runtime);
     await adapter.restartDeployment(runtime);
     await adapter.deleteDeployment(runtime);
@@ -196,8 +196,8 @@ describe("KubernetesRestWorkloadAdapter", () => {
     expect(initContainer).toMatchObject({ name: "prepare-user-workdir" });
     expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/share");
     expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/config");
-    expect(initCommand).toContain("cp '/scene-config/coding/AGENTS.md' '/app/coding/AGENTS.md'");
-    expect(initCommand).toContain("cp -R '/scene-config/coding/.opencode/.' '/app/coding/.opencode/'");
+    expect(initCommand).toContain("cp '/agent-preset-config/coding/AGENTS.md' '/app/coding/AGENTS.md'");
+    expect(initCommand).toContain("cp -R '/agent-preset-config/coding/.opencode/.' '/app/coding/.opencode/'");
     expect(runtimeContainer.command).toEqual(["/bin/sh", "-c"]);
     expect(runtimeContainer.args[0]).toContain("opencode web --port 4096 --hostname 0.0.0.0");
     expect(runtimeContainer.args[0]).toContain("quarantine");
@@ -213,13 +213,13 @@ describe("KubernetesRestWorkloadAdapter", () => {
         { hostPath: { path: "/nas/agent-master/users/user-a", type: "DirectoryOrCreate" }, name: "user-workdir" },
         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/share", type: "DirectoryOrCreate" }, name: "opencode-share" },
         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/config", type: "DirectoryOrCreate" }, name: "opencode-config" },
-        { hostPath: { path: "/nas/scenes/coding", type: "Directory" }, name: "scene-coding-source" },
+        { hostPath: { path: "/nas/agent-presets/coding", type: "Directory" }, name: "agent-preset-coding-source" },
       ]),
     );
     expect(podSpec.terminationGracePeriodSeconds).toBe(60);
     expect(runtimeContainer.lifecycle.preStop.exec.command).toEqual(["/bin/sh", "-c", "sleep 5"]);
-    expect(initContainer.volumeMounts).toContainEqual({ mountPath: "/scene-config/coding", name: "scene-coding-source", readOnly: true });
-    expect(runtimeContainer.volumeMounts).not.toContainEqual(expect.objectContaining({ name: "scene-coding-source" }));
+    expect(initContainer.volumeMounts).toContainEqual({ mountPath: "/agent-preset-config/coding", name: "agent-preset-coding-source", readOnly: true });
+    expect(runtimeContainer.volumeMounts).not.toContainEqual(expect.objectContaining({ name: "agent-preset-coding-source" }));
     expect(JSON.stringify(deployment)).not.toContain("scene-coding-agents");
     expect(JSON.stringify(deployment)).not.toContain("/nas/agent-master/users/user-a/.runtime/instances");
     expect(runtimeContainer.resources).toMatchObject({
@@ -309,8 +309,8 @@ runtime:
   timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  scenes:
-    coding: /nas/agent-master/scenes/coding
+  agentPresets:
+    coding: /nas/agent-master/agent-presets/coding
 nas:
   path: /nas/agent-master
 kubernetes:
@@ -329,7 +329,7 @@ kubernetes:
     });
 
     expect(dependencies.runtimePort).toBe(4096);
-    expect(dependencies.scenes).toEqual({ coding: "/nas/agent-master/scenes/coding" });
+    expect(dependencies.agentPresets).toEqual({ coding: "/nas/agent-master/agent-presets/coding" });
     expect(await dependencies.workload.checkCapacity({ cluster: "default", namespace: "agent-runtime" })).toMatchObject({
       allowed: true,
     });
@@ -354,8 +354,8 @@ runtime:
   timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  scenes:
-    coding: /nas/agent-master/scenes/coding
+  agentPresets:
+    coding: /nas/agent-master/agent-presets/coding
 nas:
   path: /nas/agent-master
 kubernetes:

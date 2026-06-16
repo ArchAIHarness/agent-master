@@ -43,6 +43,7 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
   const maxRuntimePerNamespace = resolveMaxRuntimePerNamespace(config);
 
   return {
+    agentPresets: config.runtime.agentPresets,
     clock: new SystemRuntimeClock(),
     cluster: config.kubernetes.cluster,
     eventBus: new InMemoryRuntimeEventBus(),
@@ -50,7 +51,6 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     proxy: new RuntimeServiceFetchProxy({ namespace: config.kubernetes.namespace }),
     runtimeImage: config.runtime.image,
     runtimePort: config.runtime.port,
-    scenes: config.runtime.scenes,
     store,
     ttlSeconds: config.runtime.ttl,
     workload: new KubernetesRestWorkloadAdapter({

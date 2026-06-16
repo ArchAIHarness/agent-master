@@ -1,6 +1,6 @@
 import { RuntimeAggregate, type RuntimeSnapshot } from "../../domain/runtime/runtime";
 import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
-import { buildRuntimeWorkspaceRoot, type RuntimeSceneRegistry } from "../../domain/runtime/runtime-policy";
+import { buildRuntimeWorkspaceRoot, type RuntimeAgentPresetRegistry } from "../../domain/runtime/runtime-policy";
 import type { RuntimeClock } from "../../ports/runtime-clock";
 import type { RuntimeEventBus } from "../../ports/runtime-event-bus";
 import type { RuntimeStore } from "../../ports/runtime-store";
@@ -13,7 +13,7 @@ export interface RuntimeCommandServiceDependencies {
   readonly namespace: string;
   readonly runtimeImage: string;
   readonly runtimePort: number;
-  readonly scenes: RuntimeSceneRegistry;
+  readonly agentPresets: RuntimeAgentPresetRegistry;
   readonly store: RuntimeStore;
   readonly ttlSeconds: number;
   readonly workload: RuntimeWorkloadPort;
@@ -165,7 +165,7 @@ export class RuntimeCommandService {
     return {
       image: this.dependencies.runtimeImage,
       runtime,
-      scenes: this.dependencies.scenes,
+      agentPresets: this.dependencies.agentPresets,
     };
   }
 

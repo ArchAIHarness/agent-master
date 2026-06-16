@@ -103,7 +103,7 @@ sequenceDiagram
     Control-->>Client: 代理响应
 ```
 
-### 2.3 会话创建与 scene 转换
+### 2.3 会话创建与 directory 透明透传
 
 ```mermaid
 sequenceDiagram
@@ -111,13 +111,14 @@ sequenceDiagram
     participant Control as agent-master
     participant Agent as Agent
 
-    Client->>Control: POST /agent/session body.scene=coding
-    Control->>Control: 校验 scene 属于 runtime.scenes
-    Control->>Control: scene -> directory=/app/coding
-    Control->>Agent: POST /session?directory=/app/coding，移除 body.scene
+    Client->>Control: POST /agent/session?directory=/app/workspace-a
+    Control->>Control: 去掉 /agent 前缀，保留 OpenCode query 和 body
+    Control->>Agent: POST /session?directory=/app/workspace-a
     Agent-->>Control: Session
     Control-->>Client: Session
 ```
+
+`directory` 是 OpenCode 官方 query 参数，由调用方显式传入。`agent-master` 不读取请求体 `scene`，也不做 `scene -> directory` 转换。
 
 ### 2.4 同步消息与异步消息
 
@@ -336,15 +337,20 @@ data: {"userId":"user-ref","runtimeId":"rt-000001","status":"running","time":"20
 
 ### 4.4 创建 Agent 会话
 
-- **用途**：在当前用户 Agent 中创建 Agent 会话。`scene` 是 `agent-master` 扩展参数，用于选择预设场景目录。
+- **用途**：在当前用户 Agent 中创建 Agent 会话。`directory` 是 OpenCode 官方 query 参数，由调用方显式传入。
 - **URL 定义**：`POST {baseUrl}/agent/session`
-- **请求方案**：普通 HTTP POST；代理转换为 `POST /session?directory=/app/{scene}`，并移除请求体中的 `scene`。
+- **请求方案**：普通 HTTP POST；代理透明转发为 `POST /session`，保留 `directory` query、请求体和其它 OpenCode 官方参数。
 - **Header**：`x-user-id`、`Content-Type: application/json` 必填。
+- **Query 参数**：
+
+| Query | 必填 | 示例 | 说明 |
+|---|---:|---|---|
+| `directory` | 否 | `/app/workspace-a` | OpenCode 会话目录；由调用方显式传入，`agent-master` 不根据 `scene` 推导。 |
+
 - **请求体**：
 
 ```json
 {
-  "scene": "coding",
   "title": "验收会话"
 }
 ```
@@ -356,8 +362,8 @@ data: {"userId":"user-ref","runtimeId":"rt-000001","status":"running","time":"20
   "id": "ses_136144a19ffehwVU9Oj8m5GsXm",
   "slug": "neon-star",
   "projectID": "global",
-  "directory": "/app/coding",
-  "path": "app/coding",
+  "directory": "/app/workspace-a",
+  "path": "app/workspace-a",
   "title": "验收会话",
   "version": "1.17.3",
   "time": {
@@ -406,8 +412,8 @@ data: {"userId":"user-ref","runtimeId":"rt-000001","status":"running","time":"20
   "id": "ses_136144a19ffehwVU9Oj8m5GsXm",
   "slug": "neon-star",
   "projectID": "global",
-  "directory": "/app/coding",
-  "path": "app/coding",
+  "directory": "/app/workspace-a",
+  "path": "app/workspace-a",
   "title": "验收会话",
   "version": "1.17.3"
 }

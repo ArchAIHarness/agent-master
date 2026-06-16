@@ -28,9 +28,3 @@ export class RuntimeNotRunningError extends RuntimeDomainError {
     super(`runtime ${runtimeId} is not running`);
   }
 }
-
-export class UnknownRuntimeSceneError extends RuntimeDomainError {
-  constructor(scene: string) {
-    super(`runtime scene ${scene} is not configured`);
-  }
-}

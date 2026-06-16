@@ -26,9 +26,9 @@ runtime:
   timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  scenes:
-    coding: /nas/agent-master/scenes/coding
-    review: /nas/agent-master/scenes/review
+  agentPresets:
+    coding: /nas/agent-master/agent-presets/coding
+    review: /nas/agent-master/agent-presets/review
 
 nas:
   path: /nas/agent-master

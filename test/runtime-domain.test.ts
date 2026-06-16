@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { RuntimeAggregate } from "../src/domain/runtime/runtime";
-import { RuntimeNotRunningError, UnknownRuntimeSceneError } from "../src/domain/runtime/runtime-errors";
-import type { RuntimeSceneRegistry } from "../src/domain/runtime/runtime-policy";
-
-const scenes: RuntimeSceneRegistry = {
-  coding: "/nas/agent-master/scenes/coding",
-  review: "/nas/agent-master/scenes/review",
-};
+import { RuntimeNotRunningError } from "../src/domain/runtime/runtime-errors";
 
 describe("RuntimeAggregate", () => {
   test("creates a user-owned runtime and records lifecycle events", () => {
@@ -84,13 +78,4 @@ describe("RuntimeAggregate", () => {
     expect(() => runtime.markRestarting("reload-opencode-config")).toThrow(RuntimeNotRunningError);
   });
 
-  test("converts a known scene into an OpenCode directory", () => {
-    const directory = RuntimeAggregate.resolveSceneDirectory({ scene: "coding", scenes });
-
-    expect(directory).toBe("/app/coding");
-  });
-
-  test("rejects unknown scene before building OpenCode directory", () => {
-    expect(() => RuntimeAggregate.resolveSceneDirectory({ scene: "../../etc", scenes })).toThrow(UnknownRuntimeSceneError);
-  });
 });

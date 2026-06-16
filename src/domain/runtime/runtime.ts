@@ -1,6 +1,6 @@
-import { RuntimeNotRunningError, UnknownRuntimeSceneError } from "./runtime-errors";
+import { RuntimeNotRunningError } from "./runtime-errors";
 import { createRuntimeEvent, type RuntimeEvent } from "./runtime-events";
-import { buildRuntimeResourceName, buildRuntimeSceneDirectory, type RuntimeSceneRegistry } from "./runtime-policy";
+import { buildRuntimeResourceName } from "./runtime-policy";
 import type { RuntimeStatus } from "./runtime-status";
 
 export interface RuntimeSnapshot {
@@ -29,11 +29,6 @@ export interface CreateRuntimeInput {
   readonly targetPort: number;
   readonly workspaceRootPath: string;
   readonly now?: Date;
-}
-
-export interface ResolveSceneDirectoryInput {
-  readonly scene: string;
-  readonly scenes: RuntimeSceneRegistry;
 }
 
 export class RuntimeAggregate {
@@ -69,13 +64,6 @@ export class RuntimeAggregate {
 
   static rehydrate(snapshot: RuntimeSnapshot): RuntimeAggregate {
     return new RuntimeAggregate(snapshot);
-  }
-
-  static resolveSceneDirectory(input: ResolveSceneDirectoryInput): string {
-    if (!Object.prototype.hasOwnProperty.call(input.scenes, input.scene)) {
-      throw new UnknownRuntimeSceneError(input.scene);
-    }
-    return buildRuntimeSceneDirectory(input.scene);
   }
 
   snapshot(): RuntimeSnapshot {

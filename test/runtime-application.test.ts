@@ -17,9 +17,9 @@ function buildServices() {
   const store = new InMemoryRuntimeStore();
   const workload = new FakeRuntimeWorkloadAdapter();
   const clock = new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z"));
-  const scenes = {
-    coding: "/nas/agent-master/scenes/coding",
-    review: "/nas/agent-master/scenes/review",
+  const agentPresets = {
+    coding: "/nas/agent-master/agent-presets/coding",
+    review: "/nas/agent-master/agent-presets/review",
   };
   const commandService = new RuntimeCommandService({
     clock,
@@ -28,7 +28,7 @@ function buildServices() {
     namespace: "agent-runtime",
     runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
     runtimePort: 4096,
-    scenes,
+    agentPresets,
     store,
     ttlSeconds: 3600,
     workload,
@@ -40,7 +40,6 @@ function buildServices() {
     clock,
     eventBus,
     proxy: agentProxy,
-    scenes,
     store,
     ttlSeconds: 3600,
   });
@@ -138,6 +137,10 @@ describe("Runtime application services", () => {
     const eventBus = new InMemoryRuntimeEventBus();
     const store = new InMemoryRuntimeStore();
     const workload = new ServiceFailingWorkloadAdapter();
+    const agentPresets = {
+      coding: "/nas/agent-master/agent-presets/coding",
+      review: "/nas/agent-master/agent-presets/review",
+    };
     const commandService = new RuntimeCommandService({
       clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
       cluster: "default",
@@ -145,7 +148,7 @@ describe("Runtime application services", () => {
       namespace: "agent-runtime",
       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
       runtimePort: 4096,
-      scenes: { coding: "/nas/agent-master/scenes/coding" },
+      agentPresets,
       store,
       ttlSeconds: 3600,
       workload,
@@ -175,17 +178,17 @@ describe("Runtime application services", () => {
     ]);
   });
 
-  test("proxies session creation by converting scene into directory, stripping authorization and extending lease", async () => {
+  test("proxies session creation transparently with OpenCode directory query, stripping authorization and extending lease", async () => {
     const { agentProxy, commandService, eventBus, proxyService, queryService } = buildServices();
     await commandService.createRuntime({ userId: "user-a" });
     eventBus.clear();
 
     const response = await proxyService.proxy({
-      body: { agent: "build", scene: "coding", title: "hello" },
+      body: { agent: "build", title: "hello" },
       headers: { authorization: "Bearer secret", "x-custom": "safe" },
       method: "POST",
       path: "/session",
-      query: {},
+      query: { directory: "/app/workspace-a" },
       userId: "user-a",
     });
 
@@ -195,7 +198,7 @@ describe("Runtime application services", () => {
       headers: { "x-custom": "safe" },
       method: "POST",
       path: "/session",
-      query: { directory: "/app/coding" },
+      query: { directory: "/app/workspace-a" },
     });
     expect((await queryService.getRuntime({ userId: "user-a" }))?.leaseExpireAt).toBe("2026-06-12T01:00:00.000Z");
     expect(eventBus.published.map((event) => event.type)).toEqual(["runtime.ttl.extended"]);

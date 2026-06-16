@@ -29,9 +29,9 @@ function buildRuntimeApp() {
       proxy,
       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
       runtimePort: 4096,
-      scenes: {
-        coding: "/nas/agent-master/scenes/coding",
-        review: "/nas/agent-master/scenes/review",
+      agentPresets: {
+        coding: "/nas/agent-master/agent-presets/coding",
+        review: "/nas/agent-master/agent-presets/review",
       },
       store,
       ttlSeconds: 3600,
@@ -138,15 +138,15 @@ describe("runtime HTTP API", () => {
     await app.close();
   });
 
-  test("proxies OpenCode session with scene conversion and without authorization", async () => {
+  test("proxies OpenCode session with directory query transparently and without authorization", async () => {
     const { app, proxy } = buildRuntimeApp();
     await app.inject({ headers: { "x-user-id": "user-a" }, method: "POST", url: "/runtime" });
 
     const response = await app.inject({
-      body: { agent: "build", scene: "coding", title: "work" },
+      body: { agent: "build", title: "work" },
       headers: { authorization: "Bearer secret", "x-user-id": "user-a" },
       method: "POST",
-      url: "/agent/session",
+      url: "/agent/session?directory=/app/workspace-a",
     });
 
     expect(response.statusCode).toBe(200);
@@ -154,7 +154,7 @@ describe("runtime HTTP API", () => {
       body: { agent: "build", title: "work" },
       headers: { "x-user-id": "user-a" },
       path: "/session",
-      query: { directory: "/app/coding" },
+      query: { directory: "/app/workspace-a" },
     });
     await app.close();
   });
@@ -262,19 +262,43 @@ describe("runtime HTTP API", () => {
     await app.close();
   });
 
-  test("rejects unknown session scene", async () => {
-    const { app } = buildRuntimeApp();
+  test("does not treat scene body field as OpenCode directory", async () => {
+    const { app, proxy } = buildRuntimeApp();
     await app.inject({ headers: { "x-user-id": "user-a" }, method: "POST", url: "/runtime" });
 
     const response = await app.inject({
-      body: { scene: "unknown" },
+      body: { scene: "coding", title: "legacy caller" },
       headers: { "x-user-id": "user-a" },
       method: "POST",
       url: "/agent/session",
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({ code: "UNKNOWN_RUNTIME_SCENE" });
+    expect(response.statusCode).toBe(200);
+    expect(proxy.requests[0]).toMatchObject({
+      body: { scene: "coding", title: "legacy caller" },
+      path: "/session",
+      query: {},
+    });
+    await app.close();
+  });
+
+  test("keeps explicit directory query when legacy scene body field is present", async () => {
+    const { app, proxy } = buildRuntimeApp();
+    await app.inject({ headers: { "x-user-id": "user-a" }, method: "POST", url: "/runtime" });
+
+    const response = await app.inject({
+      body: { scene: "coding", title: "legacy caller" },
+      headers: { "x-user-id": "user-a" },
+      method: "POST",
+      url: "/agent/session?directory=/app/workspace-a",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(proxy.requests[0]).toMatchObject({
+      body: { scene: "coding", title: "legacy caller" },
+      path: "/session",
+      query: { directory: "/app/workspace-a" },
+    });
     await app.close();
   });
 });

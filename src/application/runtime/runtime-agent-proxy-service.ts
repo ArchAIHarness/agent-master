@@ -1,6 +1,5 @@
 import { RuntimeAggregate } from "../../domain/runtime/runtime";
 import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
-import type { RuntimeSceneRegistry } from "../../domain/runtime/runtime-policy";
 import type { RuntimeClock } from "../../ports/runtime-clock";
 import type { RuntimeAgentProxyPort, RuntimeProxyHeaders, RuntimeProxyQuery, RuntimeProxyResponse } from "../../ports/runtime-agent-proxy-port";
 import type { RuntimeEventBus } from "../../ports/runtime-event-bus";
@@ -11,7 +10,6 @@ export interface RuntimeAgentProxyServiceDependencies {
   readonly clock: RuntimeClock;
   readonly eventBus: RuntimeEventBus;
   readonly proxy: RuntimeAgentProxyPort;
-  readonly scenes: RuntimeSceneRegistry;
   readonly store: RuntimeStore;
   readonly ttlSeconds: number;
 }
@@ -74,30 +72,10 @@ export class RuntimeAgentProxyService {
   }
 
   private transformRequest(input: RuntimeAgentProxyInput): { body: unknown; query: RuntimeProxyQuery } {
-    if (input.method.toUpperCase() !== "POST" || input.path !== "/session") {
-      return { body: input.body, query: input.query };
-    }
-
-    const body = isObjectRecord(input.body) ? { ...input.body } : {};
-    const sceneValue = body.scene;
-    const scene = typeof sceneValue === "string" ? sceneValue : "";
-    const directory = RuntimeAggregate.resolveSceneDirectory({ scene, scenes: this.dependencies.scenes });
-    delete body.scene;
-
-    return {
-      body,
-      query: {
-        ...input.query,
-        directory,
-      },
-    };
+    return { body: input.body, query: input.query };
   }
 }
 
 export function isOpenCodeSseProxyPath(path: string): boolean {
   return path === "/event" || path === "/global/event";
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
