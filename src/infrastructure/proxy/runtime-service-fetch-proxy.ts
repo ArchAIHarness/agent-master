@@ -45,7 +45,7 @@ export class RuntimeServiceFetchProxy implements RuntimeAgentProxyPort {
     }
     return {
       body: await readBody(response),
-      headers: stripDecodedBodyHeaders(headers),
+      headers,
       statusCode: response.status,
     };
   }
@@ -81,17 +81,6 @@ function sanitizeHeaders(headers: Record<string, string>): Headers {
   }
   sanitized.set("content-type", "application/json");
   return sanitized;
-}
-
-function stripDecodedBodyHeaders(headers: Record<string, string>): Record<string, string> {
-  const decodedHeaders: Record<string, string> = {};
-  for (const [key, value] of Object.entries(headers)) {
-    if (["content-encoding", "content-length", "transfer-encoding"].includes(key.toLowerCase())) {
-      continue;
-    }
-    decodedHeaders[key] = value;
-  }
-  return decodedHeaders;
 }
 
 async function readBody(response: Response): Promise<unknown> {

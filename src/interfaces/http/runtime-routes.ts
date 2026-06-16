@@ -15,7 +15,7 @@ export interface RuntimeRoutesDependencies {
 }
 
 export async function registerRuntimeRoutes(app: FastifyInstance, dependencies: RuntimeRoutesDependencies): Promise<void> {
-  app.post("/api/v1/runtime", async (request, reply) => {
+  app.post("/runtime", async (request, reply) => {
     try {
       const userId = requireUserId(request.headers["x-user-id"] as string | undefined);
       const runtime = await dependencies.commandService.createRuntime({ userId });
@@ -26,7 +26,7 @@ export async function registerRuntimeRoutes(app: FastifyInstance, dependencies: 
     }
   });
 
-  app.get("/api/v1/runtime", async (request, reply) => {
+  app.get("/runtime", async (request, reply) => {
     try {
       const userId = requireUserId(request.headers["x-user-id"] as string | undefined);
       const runtime = await dependencies.queryService.getRuntime({ userId });
@@ -40,7 +40,7 @@ export async function registerRuntimeRoutes(app: FastifyInstance, dependencies: 
     }
   });
 
-  app.delete("/api/v1/runtime", async (request, reply) => {
+  app.delete("/runtime", async (request, reply) => {
     try {
       const userId = requireUserId(request.headers["x-user-id"] as string | undefined);
       await dependencies.commandService.deleteRuntime({ userId });
@@ -51,7 +51,7 @@ export async function registerRuntimeRoutes(app: FastifyInstance, dependencies: 
     }
   });
 
-  app.post("/api/v1/runtime/restart", async (request, reply) => {
+  app.post("/runtime/restart", async (request, reply) => {
     try {
       const userId = requireUserId(request.headers["x-user-id"] as string | undefined);
       const body = isObjectRecord(request.body) ? request.body : {};
@@ -67,7 +67,7 @@ export async function registerRuntimeRoutes(app: FastifyInstance, dependencies: 
     }
   });
 
-  app.get("/api/v1/runtime/events", async (request, reply) => {
+  app.get("/runtime/events", async (request, reply) => {
     try {
       const userId = requireUserId(request.headers["x-user-id"] as string | undefined);
       reply.raw.writeHead(200, {

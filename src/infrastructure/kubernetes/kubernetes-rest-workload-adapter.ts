@@ -480,16 +480,16 @@ function buildOpenCodeStartupCommand(targetPort: number): string {
   const command = `opencode web --port ${targetPort} --hostname 0.0.0.0`;
   return [
     "set -u",
-    `${command}`,
+    command,
     "status=$?",
     "if [ $status -eq 0 ] || [ $status -eq 130 ] || [ $status -eq 143 ]; then exit $status; fi",
     "stamp=$(date +%Y%m%d%H%M%S)",
     "mkdir -p /root/.config/opencode/.quarantine",
     "mkdir -p /root/.config/opencode/.recovered",
-    "for item in /root/.config/opencode/* /root/.config/opencode/.[!.]* /root/.config/opencode/..?*; do [ -e \"$item\" ] || continue; name=$(basename \"$item\"); [ \"$name\" = \".quarantine\" ] && continue; [ \"$name\" = \".recovered\" ] && continue; mv \"$item\" /root/.config/opencode/.quarantine/\"$stamp-$name\"; done",
+    'for item in /root/.config/opencode/* /root/.config/opencode/.[!.]* /root/.config/opencode/..?*; do [ -e "$item" ] || continue; name=$(basename "$item"); [ "$name" = ".quarantine" ] && continue; [ "$name" = ".recovered" ] && continue; mv "$item" /root/.config/opencode/.quarantine/"$stamp-$name"; done',
     "echo '{}' > /root/.config/opencode/opencode.jsonc",
-    "echo \"OpenCode config was quarantined after startup failure $status; retrying with minimal config\" >&2",
-    `${command}`,
+    'echo "OpenCode config was quarantined after startup failure $status; retrying with minimal config" >&2',
+    command,
   ].join("; ");
 }
 

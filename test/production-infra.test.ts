@@ -259,32 +259,6 @@ describe("RuntimeServiceFetchProxy", () => {
     expect(response.body).toBeUndefined();
   });
 
-  test("removes encoded body headers after parsing proxied JSON response", async () => {
-    const proxy = new RuntimeServiceFetchProxy({
-      fetch: async () =>
-        new Response(JSON.stringify([{ ok: true }]), {
-          headers: { "Content-Encoding": "gzip", "Content-Length": "999", "Content-Type": "application/json", "Transfer-Encoding": "chunked" },
-          status: 200,
-        }),
-      namespace: "agent-runtime",
-    });
-
-    const response = await proxy.forward({
-      headers: { "accept-encoding": "gzip", "x-user-id": "user-a" },
-      method: "GET",
-      path: "/session",
-      query: {},
-      serviceName: "opencode-rt-000001",
-      servicePort: 4096,
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual([{ ok: true }]);
-    expect(Object.keys(response.headers).map((key) => key.toLowerCase())).not.toContain("content-encoding");
-    expect(Object.keys(response.headers).map((key) => key.toLowerCase())).not.toContain("content-length");
-    expect(Object.keys(response.headers).map((key) => key.toLowerCase())).not.toContain("transfer-encoding");
-  });
-
   test("forwards request to runtime service and strips authorization", async () => {
     const requests: Request[] = [];
     const proxy = new RuntimeServiceFetchProxy({

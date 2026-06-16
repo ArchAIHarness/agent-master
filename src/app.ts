@@ -1,14 +1,12 @@
 import sensible from "@fastify/sensible";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { InteractionService } from "./application/interaction/interaction-service";
 import { RuntimeAgentProxyService } from "./application/runtime/runtime-agent-proxy-service";
 import { RuntimeCommandService } from "./application/runtime/runtime-command-service";
 import { RuntimeEventStreamService } from "./application/runtime/runtime-event-stream-service";
 import { RuntimeQueryService } from "./application/runtime/runtime-query-service";
 import { loadConfig, type SchedulerConfig } from "./config";
 import { registerAgentProxyRoutes } from "./interfaces/http/agent-proxy-routes";
-import { registerInteractionRoutes } from "./interfaces/http/interaction-routes";
 import { registerRuntimeRoutes } from "./interfaces/http/runtime-routes";
 import type { RuntimeDependenciesOptions } from "./ports/runtime-dependencies";
 
@@ -23,7 +21,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   void app.register(sensible);
 
-  app.get("/api/v1/health", async () => ({
+  app.get("/health", async () => ({
     service: "agent-master",
     status: "ok",
   }));
@@ -52,13 +50,11 @@ function registerRuntimeModules(app: FastifyInstance, runtimeDependencies: Runti
     store: runtimeDependencies.store,
     ttlSeconds: runtimeDependencies.ttlSeconds,
   });
-  const interactionService = new InteractionService({ proxyService });
 
   void app.register(registerRuntimeRoutes, {
     commandService,
     eventStreamService,
     queryService,
   });
-  void app.register(registerInteractionRoutes, { interactionService });
   void app.register(registerAgentProxyRoutes, { proxyService });
 }

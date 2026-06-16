@@ -2,16 +2,11 @@ import type { RuntimeAgentProxyPort, RuntimeProxyRequest, RuntimeProxyResponse }
 
 export class FakeRuntimeAgentProxy implements RuntimeAgentProxyPort {
   readonly requests: RuntimeProxyRequest[] = [];
-  readonly responses: RuntimeProxyResponse[] = [];
-  response?: RuntimeProxyResponse;
-
-  enqueueResponse(response: RuntimeProxyResponse): void {
-    this.responses.push(response);
-  }
+  response: RuntimeProxyResponse | undefined;
 
   async forward(request: RuntimeProxyRequest): Promise<RuntimeProxyResponse> {
     this.requests.push(request);
-    return this.responses.shift() ?? this.response ?? {
+    return this.response ?? {
       body: {
         proxied: true,
         path: request.path,
