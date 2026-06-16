@@ -259,15 +259,32 @@ function normalizeInteractionEventStream(source: ReadableStream<Uint8Array>, ses
     async start(controller) {
       const reader = source.getReader();
       controller.enqueue(encodeSse("session.connected", { sessionId }));
+      let rawBuffer = "";
+      let currentEventType = "";
       while (true) {
         const chunk = await reader.read();
         if (chunk.done) {
           break;
         }
-        const text = new TextDecoder().decode(chunk.value);
-        if (text.includes("session.updated")) {
-          controller.enqueue(encodeSse("session.status", { sessionId, status: "running" }));
-          controller.enqueue(encodeSse("assistant.snapshot", { sessionId }));
+        rawBuffer += new TextDecoder().decode(chunk.value);
+        // Process complete SSE lines; keep incomplete last line in buffer
+        const lines = rawBuffer.split("\n");
+        rawBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEventType = line.slice("event: ".length).trim();
+          } else if (line.startsWith("data: ")) {
+            const jsonText = line.slice("data: ".length).trim();
+            try {
+              const data = JSON.parse(jsonText);
+              if (currentEventType === "session.updated" || data.type === "session.updated") {
+                controller.enqueue(encodeSse("session.status", { sessionId, status: "running" }));
+                controller.enqueue(encodeSse("assistant.snapshot", { sessionId }));
+              }
+            } catch {
+              // ignore malformed JSON
+            }
+          }
         }
       }
       controller.close();
