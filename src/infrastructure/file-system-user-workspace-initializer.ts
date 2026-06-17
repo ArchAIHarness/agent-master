@@ -4,24 +4,28 @@ import type { UserWorkspaceInitializer } from "../ports/user-workspace-initializ
 
 export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitializer {
   async initialize(workspaceRoot: string, templatesRoot: string): Promise<void> {
-    // 1. Create all required directories
-    // Directory structure per user:
-    // - {workspaceRoot}/ → /app (user workdir)
-    // - {workspaceRoot}/.opencode/ → /app/.opencode
-    // - {workspaceRoot}/.runtime/opencode/config → /root/.config/opencode (OpenCode config)
-    // - {workspaceRoot}/.runtime/opencode/data → /root/.local/share/opencode (OpenCode data/auth)
-    // - {workspaceRoot}/.runtime/opencode/cache → /root/.cache/opencode (OpenCode cache/providers/plugins)
+    // 1. Create all required directories (top-level design: runtime + global split)
+    // Directory structure per user on NAS:
+    // - {workspaceRoot}/                  → root for this user
+    // - {workspaceRoot}/runtime/          → subPath mounted to container /app (user project workspace)
+    //   - {workspaceRoot}/runtime/AGENTS.md          → /app/AGENTS.md (default project rules from template)
+    //   - {workspaceRoot}/runtime/.opencode/opencode.json → /app/.opencode/opencode.json (default opencode config from template)
+    // - {workspaceRoot}/global/           → subPath mounted to container /root (matches opencode default home directory structure)
+    //   - {workspaceRoot}/global/.config/opencode     → /root/.config/opencode (opencode global config)
+    //   - {workspaceRoot}/global/.local/share/opencode → /root/.local/share/opencode (opencode global data/auth.json)
+    //   - {workspaceRoot}/global/.cache/opencode     → /root/.cache/opencode (opencode cache/providers/plugins)
     await this.ensureDir(workspaceRoot);
-    await this.ensureDir(`${workspaceRoot}/.opencode`);
-    await this.ensureDir(`${workspaceRoot}/.runtime/opencode/config`);
-    await this.ensureDir(`${workspaceRoot}/.runtime/opencode/data`);
-    await this.ensureDir(`${workspaceRoot}/.runtime/opencode/cache`);
+    await this.ensureDir(`${workspaceRoot}/runtime`);
+    await this.ensureDir(`${workspaceRoot}/runtime/.opencode`);
+    await this.ensureDir(`${workspaceRoot}/global/.config/opencode`);
+    await this.ensureDir(`${workspaceRoot}/global/.local/share/opencode`);
+    await this.ensureDir(`${workspaceRoot}/global/.cache/opencode`);
 
     // 2. Copy default templates only if files do NOT exist (atomic, never overwrite user files)
-    // - {templatesRoot}/AGENTS.md → {workspaceRoot}/AGENTS.md
-    await this.copyIfNotExists(`${templatesRoot}/AGENTS.md`, `${workspaceRoot}/AGENTS.md`);
-    // - {templatesRoot}/.opencode/opencode.json → {workspaceRoot}/.opencode/opencode.json
-    await this.copyIfNotExists(`${templatesRoot}/.opencode/opencode.json`, `${workspaceRoot}/.opencode/opencode.json`);
+    // - {templatesRoot}/AGENTS.md → {workspaceRoot}/runtime/AGENTS.md
+    await this.copyIfNotExists(`${templatesRoot}/AGENTS.md`, `${workspaceRoot}/runtime/AGENTS.md`);
+    // - {templatesRoot}/.opencode/opencode.json → {workspaceRoot}/runtime/.opencode/opencode.json
+    await this.copyIfNotExists(`${templatesRoot}/.opencode/opencode.json`, `${workspaceRoot}/runtime/.opencode/opencode.json`);
   }
 
   private async ensureDir(dir: string): Promise<void> {
