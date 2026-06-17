@@ -756,6 +756,36 @@ OpenCode 配置加载规则：
 - 代理只经 Agent Service 转发，不直接访问 Pod IP。
 - 不允许通过代理路径访问 `agent-master` 自身管理接口。
 
+### 7.9 WebUI 反向代理（可选）
+
+```http
+/webui/*
+```
+
+`/webui/*` 是浏览器进入 Runtime 内置 WebUI（如 `agent-image-webui` 镜像内置的 AionUi）的统一入口。本路由是**可选**的：仅当 `runtime.webuiPort` 在 `config.yaml` 中显式配置（典型值 `3000`）且 Agent Deployment 对应的 Service 也暴露了同一端口时才注册；不配置时 master 不暴露 `/webui/*`，对外仍只保留 `/agent/*` 与 `/runtime/*`。
+
+行为约定：
+
+- WebUI 路由只支持 HTTP（含 SSE）。WebSocket 升级请求不在 `/webui/*` 处理；如未来需要 WebUI WebSocket，会另开独立入口，避免与 `/agent/ws/*` 路由冲突。
+- 转发到 Agent Service 时必须去掉 `/webui` 前缀，保留后续路径、查询参数、HTTP 方法和请求体；根访问 `/webui` 与 `/webui/` 都映射到上游 `/`。
+- WebUI 反代必须连接到 Service 的 `runtime.webuiPort`，**不复用**已有 `/agent/*` 的 `runtime.port`（4096）。
+- 不向 Agent 透传 `Authorization`、`x-user-id`、`Proxy-Authorization` 与所有 hop-by-hop Header；浏览器的 `Cookie` 必须保留，因为 AionUi session 依赖。
+- 上游响应中的 `Set-Cookie` 必须把 `Path` 属性改写为 `runtime.webuiPathPrefix`（默认 `/webui`），避免 Cookie 误渗到 `/agent/*` 与 `/runtime/*`。
+- 上游响应中的 hop-by-hop Header（`Connection`、`Content-Length`、`Transfer-Encoding` 等）按既有 `/agent/*` 规则剥离。
+- 普通请求触发 Agent 租约续约到 1 小时；SSE 长连接存在时周期性续约；连接结束后停止续约，后续由 Redis TTL 到期触发回收。
+
+配置入口（`config.yaml`）：
+
+```yaml
+runtime:
+  image: agent-image-webui:latest   # 必须使用带 WebUI 的镜像
+  port: 4096                        # OpenCode Web 端口（不变）
+  webuiPort: 3000                   # AionUi 端口；不设置则不开 /webui/*
+  webuiPathPrefix: /webui           # 浏览器侧前缀；默认 /webui
+```
+
+如果运行时镜像本身不含 WebUI（如 `agent-image`），保持 `webuiPort` 留空即可，master 自动跳过本路由。
+
 ## 8. Kubernetes 资源设计
 
 Kubernetes 资源设计只围绕 Agent 运行单元展开，承接用户目录和 OpenCode 三级持久化目录（config/data/cache）的挂载约定，不承接完整平台控制面、审计中心或运行时动态配置切换职责。平台场景化能力由 OpenCode 原生 `plugin` 机制在上游控制面实现。

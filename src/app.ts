@@ -7,10 +7,12 @@ import { RuntimeAgentWebSocketService } from "./application/runtime/runtime-agen
 import { RuntimeCommandService } from "./application/runtime/runtime-command-service";
 import { RuntimeEventStreamService } from "./application/runtime/runtime-event-stream-service";
 import { RuntimeQueryService } from "./application/runtime/runtime-query-service";
+import { RuntimeWebUiProxyService } from "./application/runtime/runtime-webui-proxy-service";
 import { loadConfig, type SchedulerConfig } from "./config";
 import { registerAgentProxyRoutes } from "./interfaces/http/agent-proxy-routes";
 import { registerAgentWebSocketRoutes } from "./interfaces/http/agent-websocket-routes";
 import { registerRuntimeRoutes } from "./interfaces/http/runtime-routes";
+import { registerWebUiProxyRoutes } from "./interfaces/http/webui-proxy-routes";
 import type { RuntimeDependenciesOptions } from "./ports/runtime-dependencies";
 
 export interface BuildAppOptions {
@@ -60,6 +62,22 @@ function registerRuntimeModules(app: FastifyInstance, runtimeDependencies: Runti
     queryService,
   });
   void app.register(registerAgentProxyRoutes, { proxyService });
+
+  if (runtimeDependencies.webuiPort !== undefined) {
+    const webuiProxyService = new RuntimeWebUiProxyService({
+      clock: runtimeDependencies.clock,
+      eventBus: runtimeDependencies.eventBus,
+      pathPrefix: runtimeDependencies.webuiPathPrefix ?? "/webui",
+      proxy: runtimeDependencies.proxy,
+      store: runtimeDependencies.store,
+      ttlSeconds: runtimeDependencies.ttlSeconds,
+      webuiPort: runtimeDependencies.webuiPort,
+    });
+    void app.register(registerWebUiProxyRoutes, {
+      pathPrefix: runtimeDependencies.webuiPathPrefix ?? "/webui",
+      proxyService: webuiProxyService,
+    });
+  }
 
   if (runtimeDependencies.websocket) {
     const websocketService = new RuntimeAgentWebSocketService({

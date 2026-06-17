@@ -25,6 +25,11 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  # WebUI proxy. Leave webuiPort empty for headless agent-image. Set to 3000
+  # when using agent-image-webui (OpenCode + AionUi). The Service of the
+  # runtime Deployment must expose this port too.
+  # webuiPort: 3000
+  webuiPathPrefix: /webui
 
 init:
   # Root directory where default initialization templates are stored.

@@ -21,4 +21,8 @@ export interface RuntimeDependenciesOptions {
   readonly websocket?: RuntimeAgentWebSocketPort;
   readonly workload: RuntimeWorkloadPort;
   readonly workdirRoot: string;
+  /** Optional WebUI proxy port (e.g. AionUi). When set, master exposes /webui/*. */
+  readonly webuiPort?: number;
+  /** Path prefix the WebUI is mounted under on master. Defaults to "/webui". */
+  readonly webuiPathPrefix?: string;
 }

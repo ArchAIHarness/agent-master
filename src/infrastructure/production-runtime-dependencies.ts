@@ -63,6 +63,8 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
       ...(maxRuntimePerNamespace === undefined ? {} : { maxRuntimePerNamespace }),
     }),
     workdirRoot: config.runtime.workdir,
+    ...(config.runtime.webuiPort === undefined ? {} : { webuiPort: config.runtime.webuiPort }),
+    webuiPathPrefix: config.runtime.webuiPathPrefix,
   };
 }
 

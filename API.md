@@ -1991,3 +1991,51 @@ PTY 双向数据帧不在本节，使用第 13 节 WebSocket 入口。
 | `1000` | 正常关闭，由调用方或 Agent 主动结束 PTY。 |
 | `1008` | 鉴权失败、路径不在白名单或 Agent 不在 `running` 状态。 |
 | `1011` | master 与 Agent 之间桥接异常（上下游 send 失败、上游 error）。 |
+
+## 14. WebUI 反向代理（可选）
+
+本节描述 master 把浏览器请求反代到 Runtime 内置 WebUI（如 `agent-image-webui` 镜像中的 AionUi）所遵循的契约。本路由是**可选**的：仅当 `runtime.webuiPort` 在 `config.yaml` 中显式配置（典型值 `3000`）且 Agent Deployment 对应的 Service 暴露同一端口时才注册；不配置时 master 不暴露 `/webui/*`。
+
+### 14.1 入口
+
+- **URL 前缀**：`/webui/*`，前缀可通过 `runtime.webuiPathPrefix` 自定义，默认 `/webui`。
+- **协议**：HTTP / HTTPS / SSE。WebSocket 升级请求不在 `/webui/*` 处理；如未来需要 WebUI WebSocket，会另开独立入口，避免与 `/agent/ws/*` 冲突。
+
+### 14.2 路径与端口映射
+
+- master 去掉 `/webui` 前缀后转发到上游：`/webui/api/foo` → `/api/foo`；根访问 `/webui` 与 `/webui/` 都映射到上游 `/`。
+- 转发时使用 `runtime.webuiPort`（默认建议 `3000`）拼接 Service DNS：`http://<serviceName>.<namespace>.svc.cluster.local:<webuiPort>/...`，不复用 `runtime.port`（4096）。
+- HTTP 方法、查询参数、请求体按原样透传。
+
+### 14.3 鉴权与 Header
+
+- 必须从 Header `x-user-id` 解析当前用户；缺失或非法时返回 `400 MISSING_USER_ID` / `400 INVALID_USER_ID`，与 `/agent/*` 规则一致。
+- master 内部 Header 不向 AionUi 透传：`Authorization`、`x-user-id`、`Proxy-Authorization`、`Connection`、`Upgrade`、`Keep-Alive`、`Te`、`Trailer`、`Transfer-Encoding`、`Host`。
+- 浏览器 `Cookie` 必须保留并按原样透传给 AionUi（AionUi session 依赖 Cookie）。
+
+### 14.4 响应改写
+
+- AionUi 默认下发 `Set-Cookie ...; Path=/`。master 必须把 `Path` 属性改写为 `runtime.webuiPathPrefix`（默认 `/webui`），避免 Cookie 渗到 `/agent/*` 与 `/runtime/*`。
+- 上游响应中的 hop-by-hop Header（`Connection`、`Content-Encoding`、`Content-Length`、`Keep-Alive`、`Te`、`Trailer`、`Transfer-Encoding`、`Upgrade`）按既有 `/agent/*` 规则剥离。
+- 其他响应 Header（含 `Content-Type`、自定义 Header）原样透传。
+
+### 14.5 SSE 与租约
+
+- 如果上游响应 `Content-Type: text/event-stream`，master 以流式 chunked 方式回写，不缓冲、不压缩。
+- 普通请求触发 Agent 租约续约到 1 小时；SSE 长连接存在时按平台节奏周期续约；连接结束（请求 close、上游结束、reader cancel）必须立即停止续约。
+- 续约失败不阻塞代理响应；续约异常仅写日志。
+
+### 14.6 错误码
+
+| HTTP / 码 | 含义 |
+|---|---|
+| `400 MISSING_USER_ID` | 请求缺少 `x-user-id`。 |
+| `400 INVALID_USER_ID` | `x-user-id` 含不安全字符，被 master 拒绝。 |
+| `404 RUNTIME_NOT_FOUND` | 当前用户没有处于 `running` 状态的 Agent。 |
+| `502 / upstream` | AionUi 端口不可达；通常意味着该 Runtime 镜像不包含 WebUI。 |
+| `500 INTERNAL_ERROR` | master 自身未处理异常。 |
+
+### 14.7 不在本节范围
+
+- 浏览器 SSO、AionUi admin 登录、AionUi session 注入等鉴权策略不在本服务实现，由上游网关或后续独立模块承担。
+- WebSocket 反代不在 `/webui/*` 范围内。
