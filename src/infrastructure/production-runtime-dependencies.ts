@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import type { RuntimeDependenciesOptions } from "../ports/runtime-dependencies";
 import { SystemRuntimeClock } from "./fake/fixed-runtime-clock";
+import { FileSystemUserWorkspaceInitializer } from "./file-system-user-workspace-initializer";
 import { InMemoryRuntimeEventBus } from "./fake/in-memory-runtime-event-bus";
 import { KubernetesFetchHttpClient } from "./kubernetes/kubernetes-http-client";
 import { KubernetesRestWorkloadAdapter, type KubernetesHttpClient } from "./kubernetes/kubernetes-rest-workload-adapter";
@@ -41,6 +42,7 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
       ...readServiceAccountCredentials(),
     });
   const maxRuntimePerNamespace = resolveMaxRuntimePerNamespace(config);
+  const userWorkspaceInitializer = new FileSystemUserWorkspaceInitializer();
 
   return {
     clock: new SystemRuntimeClock(),
@@ -51,7 +53,9 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     runtimeImage: config.runtime.image,
     runtimePort: config.runtime.port,
     store,
+    templatesRoot: config.init.templatesRoot,
     ttlSeconds: config.runtime.ttl,
+    userWorkspaceInitializer,
     workload: new KubernetesRestWorkloadAdapter({
       http: kubernetesHttp,
       ...(maxRuntimePerNamespace === undefined ? {} : { maxRuntimePerNamespace }),

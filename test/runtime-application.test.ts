@@ -6,6 +6,7 @@ import { RuntimeEventStreamService } from "../src/application/runtime/runtime-ev
 import { RuntimeQueryService } from "../src/application/runtime/runtime-query-service";
 import { InMemoryRuntimeEventBus } from "../src/infrastructure/fake/in-memory-runtime-event-bus";
 import { InMemoryRuntimeStore } from "../src/infrastructure/fake/in-memory-runtime-store";
+import { NoopUserWorkspaceInitializer } from "../src/infrastructure/fake/noop-user-workspace-initializer";
 import { FakeRuntimeAgentProxy } from "../src/infrastructure/fake/fake-runtime-agent-proxy";
 import type { RuntimeSnapshot } from "../src/domain/runtime/runtime";
 import { FakeRuntimeWorkloadAdapter } from "../src/infrastructure/fake/fake-runtime-workload-adapter";
@@ -17,6 +18,7 @@ function buildServices() {
   const store = new InMemoryRuntimeStore();
   const workload = new FakeRuntimeWorkloadAdapter();
   const clock = new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z"));
+  const userWorkspaceInitializer = new NoopUserWorkspaceInitializer();
   const commandService = new RuntimeCommandService({
     clock,
     cluster: "default",
@@ -25,7 +27,9 @@ function buildServices() {
     runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
     runtimePort: 4096,
     store,
+    templatesRoot: "./resources/templates",
     ttlSeconds: 3600,
+    userWorkspaceInitializer,
     workload,
     workdirRoot: "/nas/agent-master/users",
   });
@@ -128,26 +132,25 @@ describe("Runtime application services", () => {
     expect(eventBus.published.map((event) => event.type)).toEqual(["runtime.ttl.extended"]);
   });
 
-  test("compensates deployment when service creation fails", async () => {
-    const eventBus = new InMemoryRuntimeEventBus();
-    const store = new InMemoryRuntimeStore();
-    const workload = new ServiceFailingWorkloadAdapter();
-    const agentPresets = {
-      coding: "/nas/agent-master/agent-presets/coding",
-      review: "/nas/agent-master/agent-presets/review",
-    };
-    const commandService = new RuntimeCommandService({
-       clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
-       cluster: "default",
-       eventBus,
-       namespace: "agent-runtime",
-       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
-       runtimePort: 4096,
-       store,
-       ttlSeconds: 3600,
-       workload,
-       workdirRoot: "/nas/agent-master/users",
-     });
+   test("compensates deployment when service creation fails", async () => {
+     const eventBus = new InMemoryRuntimeEventBus();
+     const store = new InMemoryRuntimeStore();
+     const workload = new ServiceFailingWorkloadAdapter();
+     const userWorkspaceInitializer = new NoopUserWorkspaceInitializer();
+     const commandService = new RuntimeCommandService({
+        clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
+        cluster: "default",
+        eventBus,
+        namespace: "agent-runtime",
+        runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
+        runtimePort: 4096,
+        store,
+        templatesRoot: "./resources/templates",
+        ttlSeconds: 3600,
+        userWorkspaceInitializer,
+        workload,
+        workdirRoot: "/nas/agent-master/users",
+      });
 
     await expect(commandService.createRuntime({ userId: "user-a" })).rejects.toThrow("service creation failed");
 

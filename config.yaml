@@ -26,6 +26,12 @@ runtime:
   port: 4096
   workdir: /nas/agent-master/users
 
+init:
+  # Root directory where default initialization templates are stored.
+  # - AGENTS.md → user workdir AGENTS.md (created if not exists)
+  # - opencode.json → user workdir .opencode/opencode.json (created if not exists)
+  templatesRoot: ./resources/templates
+
 kubernetes:
   cluster: default
   namespace: agent-runtime

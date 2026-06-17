@@ -44,13 +44,10 @@ redis:
 runtime:
   image: ghcr.io/archaiharness/agent-runtime:latest
   ttl: 3600
-  timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  agentPresets:
-    coding: /nas/agent-master/agent-presets/coding
-nas:
-  path: /nas/agent-master
+init:
+  templatesRoot: ./test/fixtures/templates
 kubernetes:
   cluster: default
   namespace: agent-runtime
@@ -303,13 +300,10 @@ redis:
 runtime:
   image: ghcr.io/archaiharness/agent-runtime:latest
   ttl: 3600
-  timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  agentPresets:
-    coding: /nas/agent-master/agent-presets/coding
-nas:
-  path: /nas/agent-master
+init:
+  templatesRoot: ./test/fixtures/templates
 kubernetes:
   cluster: default
   namespace: agent-runtime
@@ -347,13 +341,10 @@ redis:
 runtime:
   image: ghcr.io/archaiharness/agent-runtime:latest
   ttl: 3600
-  timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  agentPresets:
-    coding: /nas/agent-master/agent-presets/coding
-nas:
-  path: /nas/agent-master
+init:
+  templatesRoot: ./test/fixtures/templates
 kubernetes:
   cluster: default
   namespace: agent-runtime

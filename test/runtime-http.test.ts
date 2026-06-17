@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { buildApp } from "../src/app";
 import type { RuntimeEvent } from "../src/domain/runtime/runtime-events";
 import { FakeRuntimeAgentProxy } from "../src/infrastructure/fake/fake-runtime-agent-proxy";
+import { NoopUserWorkspaceInitializer } from "../src/infrastructure/fake/noop-user-workspace-initializer";
 import { FakeRuntimeWorkloadAdapter } from "../src/infrastructure/fake/fake-runtime-workload-adapter";
 import { FixedRuntimeClock } from "../src/infrastructure/fake/fixed-runtime-clock";
 import { InMemoryRuntimeEventBus } from "../src/infrastructure/fake/in-memory-runtime-event-bus";
@@ -14,6 +15,7 @@ function buildRuntimeApp() {
   const store = new InMemoryRuntimeStore();
   const workload = new FakeRuntimeWorkloadAdapter();
   const proxy = new FakeRuntimeAgentProxy();
+  const userWorkspaceInitializer = new NoopUserWorkspaceInitializer();
   const app = buildApp({
     config: {
       clusters: [],
@@ -30,7 +32,9 @@ function buildRuntimeApp() {
       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
       runtimePort: 4096,
       store,
+      templatesRoot: "./resources/templates",
       ttlSeconds: 3600,
+      userWorkspaceInitializer,
       workload,
       workdirRoot: "/nas/agent-master/users",
     },

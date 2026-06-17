@@ -19,6 +19,9 @@ const productionConfigSchema = z.object({
     port: z.number().int().min(1).max(65_535),
     workdir: z.string().min(1),
   }),
+  init: z.object({
+    templatesRoot: z.string().min(1),
+  }),
   kubernetes: z.object({
     cluster: z.string().min(1),
     namespace: z.string().min(1),

@@ -3,6 +3,7 @@ import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
 import { buildRuntimeWorkspaceRoot } from "../../domain/runtime/runtime-policy";
 import type { RuntimeClock } from "../../ports/runtime-clock";
 import type { RuntimeEventBus } from "../../ports/runtime-event-bus";
+import type { UserWorkspaceInitializer } from "../../ports/user-workspace-initializer";
 import type { RuntimeStore } from "../../ports/runtime-store";
 import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../ports/runtime-workload-port";
 
@@ -14,7 +15,9 @@ export interface RuntimeCommandServiceDependencies {
   readonly runtimeImage: string;
   readonly runtimePort: number;
   readonly store: RuntimeStore;
+  readonly templatesRoot: string;
   readonly ttlSeconds: number;
+  readonly userWorkspaceInitializer: UserWorkspaceInitializer;
   readonly workload: RuntimeWorkloadPort;
   readonly workdirRoot: string;
 }
@@ -58,15 +61,23 @@ export class RuntimeCommandService {
       runtime.markScheduled();
       await this.publish(runtime);
 
-      const capacity = await this.dependencies.workload.checkCapacity({
-        cluster: this.dependencies.cluster,
-        namespace: this.dependencies.namespace,
-      });
-      if (!capacity.allowed) {
-        throw new Error(capacity.reason ?? "runtime capacity check failed");
-      }
+       const capacity = await this.dependencies.workload.checkCapacity({
+         cluster: this.dependencies.cluster,
+         namespace: this.dependencies.namespace,
+       });
+       if (!capacity.allowed) {
+         throw new Error(capacity.reason ?? "runtime capacity check failed");
+       }
 
-      const spec = this.buildWorkloadSpec(runtime.snapshot());
+       // Initialize user workspace on master side before creating deployment
+       // - First creation: copy default templates if files not exist
+       // - Restart: only ensure directories exist, never overwrite user files
+       await this.dependencies.userWorkspaceInitializer.initialize(
+         runtime.snapshot().workspaceRootPath,
+         this.dependencies.templatesRoot,
+       );
+
+       const spec = this.buildWorkloadSpec(runtime.snapshot());
       await this.dependencies.workload.createDeployment(spec);
       deploymentCreated = true;
       runtime.markDeploymentCreated();
