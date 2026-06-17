@@ -291,24 +291,24 @@ Value 示例：
 
 ```json
 {
-  "runtimeId": "rt-xxxx",
-  "userId": "user-ref",
+  "runtimeId": "rt-weizuxiao-a3b7",
+  "userId": "weizuxiao",
   "status": "running",
   "cluster": "cluster-a",
   "namespace": "agent-runtime",
-  "deploymentName": "opencode-rt-xxxx",
-  "serviceName": "opencode-rt-xxxx",
+  "deploymentName": "agent-rt-weizuxiao-a3b7",
+  "serviceName": "agent-rt-weizuxiao-a3b7",
   "podSelector": {
-    "app": "opencode-runtime",
-    "runtimeId": "rt-xxxx",
-    "userId": "user-ref"
+    "app": "agent-runtime",
+    "runtimeId": "rt-weizuxiao-a3b7",
+    "userId": "weizuxiao"
   },
   "servicePort": 4096,
   "targetPort": 4096,
-  "workspaceRootPath": "/nas/agent-master/users/user-ref",
+  "workspaceRootPath": "/nas/agent-master/users/weizuxiao",
   "leaseExpireAt": "2026-06-11T12:00:00.000Z",
   "createdAt": "2026-06-11T11:00:00.000Z",
-  "updatedAt": "2026-06-11T11:20:00.000Z"
+  "updatedAt": "2026-06-11T11:20:00.000Z",
 }
 ```
 
@@ -527,16 +527,21 @@ Kubernetes 的 `subPath` 挂载要求**源路径必须已经存在**。如果 NA
 - `cache/` 目录由 OpenCode 进程自行管理，初始化时只确保目录存在，不写入任何内容
 - `data/auth.json` 由 OpenCode 首次连接 provider 时自动生成到 `global/.local/share/opencode/`，初始化流程绝不触碰
 
-### 6.5 Kubernetes 资源标识
+ ### 6.5 Kubernetes 资源标识
 
-Agent 实例与 Kubernetes 资源通过统一命名和 Labels 绑定。
+ Agent 实例与 Kubernetes 资源通过统一命名和 Labels 绑定。
 
-| 资源 | 命名建议 | 说明 |
-|---|---|---|
-| Agent ID | `rt-{shortId}` | 对外返回的 Agent 实例标识。 |
-| Deployment | `opencode-{runtimeId}` | 固定 1 副本。 |
-| Service | `opencode-{runtimeId}` | 作为 Agent API 代理目标。 |
-| Labels | `app=opencode-runtime`、`runtimeId={runtimeId}`、`userId={userId}` | 用于资源查询、清理和 Selector 绑定。 |
+ | 资源 | 命名规则 | 说明 |
+ |---|---|---|
+ | `runtimeId` | `rt-{sanitizedUserId}-{4-random-alphanumeric}` | Agent 实例唯一标识。 |
+ | Deployment | `agent-{runtimeId}` | 固定 1 副本。 |
+ | Service | `agent-{runtimeId}` | 作为 Agent API 代理目标。 |
+ | Labels | `app=agent-runtime`、`runtimeId={runtimeId}`、`userId={userId}` | 用于资源查询、清理和 Selector 绑定。 |
+
+ 命名规则说明：
+ - `runtimeId` 由 `userId`  sanitize 后加上 4 位随机小写字母数字后缀生成
+ - 保证 Kubernetes 名称兼容性（只能小写字母、数字、'-'，不能开头/结尾是 '-'）
+ - 同一个用户多次创建会生成不同 `runtimeId`，避免名称冲突
 
 ## 7. API 接口设计
 
@@ -673,14 +678,14 @@ runtime.heartbeat
 
 ```json
 {
-  "runtimeId": "rt-xxxx",
-  "userId": "user-ref",
+  "runtimeId": "rt-weizuxiao-a3b7",
+  "userId": "weizuxiao",
   "status": "running",
   "cluster": "cluster-a",
   "namespace": "agent-runtime",
-  "deploymentName": "opencode-rt-xxxx",
-  "serviceName": "opencode-rt-xxxx",
-  "leaseExpireAt": "2026-06-11T12:00:00.000Z"
+  "deploymentName": "agent-rt-weizuxiao-a3b7",
+  "serviceName": "agent-rt-weizuxiao-a3b7",
+  "leaseExpireAt": "2026-06-11T12:00:00.000Z",
 }
 ```
 

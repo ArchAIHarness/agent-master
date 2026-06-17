@@ -44,8 +44,8 @@ export class RuntimeAggregate {
       createdAt: now,
       deploymentName: resourceName,
       namespace: input.namespace,
-      podSelector: {
-        app: "opencode-runtime",
+       podSelector: {
+        app: "agent-runtime",
         runtimeId: input.runtimeId,
         userId: input.userId,
       },

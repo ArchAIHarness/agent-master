@@ -1,11 +1,9 @@
-export type RuntimeAgentPresetRegistry = Record<string, string>;
-
 export interface RuntimeNamingPolicyInput {
   runtimeId: string;
 }
 
 export function buildRuntimeResourceName(input: RuntimeNamingPolicyInput): string {
-  return `opencode-${input.runtimeId}`;
+  return `agent-${input.runtimeId}`;
 }
 
 export function buildRuntimeWorkspaceRoot(workdirRoot: string, userId: string): string {

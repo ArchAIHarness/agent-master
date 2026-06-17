@@ -292,9 +292,21 @@ function findRuntimeDeploymentReason(value: unknown, namespace: string, maxRunti
   return unhealthy ? `namespace ${namespace} has unhealthy runtime deployments` : undefined;
 }
 
-function hasWarningEvents(value: unknown): boolean {
-  return readItems(value).length > 0;
-}
+ function hasWarningEvents(value: unknown): boolean {
+   // Only block on critical quota/resource warnings, not image pull warnings
+   // Image pull warnings are expected for local-built images and will be retried
+   const items = readItems(value);
+   return items.some(item => {
+     if (!isObjectRecord(item) || typeof item.message !== 'string') {
+       return false;
+     }
+     // Block only resource quota exhausted, limit range violations
+     // Allow image pull warnings for local images
+     const message = item.message.toLowerCase();
+     return message.includes('quota') && message.includes('exhausted') ||
+            message.includes('limitrange') && message.includes('violates');
+   });
+ }
 
 function readItems(value: unknown): Record<string, unknown>[] {
   if (!isObjectRecord(value) || !Array.isArray(value.items)) {
@@ -368,11 +380,12 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
         metadata: { labels: spec.runtime.podSelector },
         spec: {
           terminationGracePeriodSeconds: 60,
-          initContainers: [
-            {
-              command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand()],
-              image: "busybox:1.36",
-              name: "prepare-user-workdir",
+           initContainers: [
+             {
+               command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand()],
+               image: "busybox:1.36",
+               imagePullPolicy: "IfNotPresent",
+               name: "prepare-user-workdir",
               volumeMounts: [
                 {
                   mountPath: "/app",
@@ -393,13 +406,14 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
               ],
             },
           ],
-          containers: [
-            {
-              args: [buildOpenCodeStartupCommand(spec.runtime.targetPort)],
-              command: ["/bin/sh", "-c"],
-              image: spec.image,
-              name: "opencode-runtime",
-              ports: [{ containerPort: spec.runtime.targetPort, name: "http" }],
+           containers: [
+             {
+               args: [buildOpenCodeStartupCommand(spec.runtime.targetPort)],
+               command: ["/bin/sh", "-c"],
+               image: spec.image,
+               imagePullPolicy: "IfNotPresent",
+               name: "opencode-runtime",
+               ports: [{ containerPort: spec.runtime.targetPort, name: "http" }],
               lifecycle: {
                 preStop: {
                   exec: {

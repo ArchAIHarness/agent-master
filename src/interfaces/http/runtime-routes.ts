@@ -21,6 +21,7 @@ export async function registerRuntimeRoutes(app: FastifyInstance, dependencies: 
       const runtime = await dependencies.commandService.createRuntime({ userId });
       return reply.code(201).send(toRuntimeResponse(runtime));
     } catch (error) {
+      console.error("Failed to create runtime", error);
       const mapped = mapErrorToStatus(error);
       return reply.code(mapped.statusCode).send(mapped.body);
     }

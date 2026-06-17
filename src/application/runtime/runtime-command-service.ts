@@ -23,9 +23,23 @@ export interface RuntimeCommandServiceDependencies {
 }
 
 export class RuntimeCommandService {
-  private sequence = 0;
-
   constructor(private readonly dependencies: RuntimeCommandServiceDependencies) {}
+
+  private generateRuntimeId(userId: string): string {
+    // Sanitize userId for Kubernetes name compatibility:
+    // - Kubernetes only allows lowercase letters, digits, '-', must not start/end with '-'
+    // - Add 4 random chars to avoid collision if same user creates multiple times
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let random = "";
+    for (let i = 0; i < 4; i++) {
+      random += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const sanitizedUserId = userId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!sanitizedUserId) {
+      return `rt-${random}`;
+    }
+    return `rt-${sanitizedUserId}-${random}`;
+  }
 
   async createRuntime(input: { userId: string }): Promise<RuntimeSnapshot> {
     const existing = await this.dependencies.store.getByUserId(input.userId);
@@ -35,11 +49,12 @@ export class RuntimeCommandService {
       return runtime.snapshot();
     }
 
+    const runtimeId = this.generateRuntimeId(input.userId);
     const runtime = RuntimeAggregate.create({
       cluster: this.dependencies.cluster,
       namespace: this.dependencies.namespace,
       now: this.dependencies.clock.now(),
-      runtimeId: this.nextRuntimeId(),
+      runtimeId,
       servicePort: this.dependencies.runtimePort,
       targetPort: this.dependencies.runtimePort,
       userId: input.userId,
@@ -178,8 +193,4 @@ export class RuntimeCommandService {
     };
   }
 
-  private nextRuntimeId(): string {
-    this.sequence += 1;
-    return `rt-${this.sequence.toString().padStart(6, "0")}`;
-  }
 }

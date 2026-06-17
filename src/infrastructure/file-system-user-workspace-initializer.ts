@@ -29,23 +29,32 @@ export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitiali
   }
 
   private async ensureDir(dir: string): Promise<void> {
-    if (existsSync(dir)) {
-      return;
+    try {
+      if (existsSync(dir)) {
+        return;
+      }
+      await mkdir(dir, { recursive: true });
+    } catch (error) {
+      throw new Error(`Failed to create directory ${dir}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    await mkdir(dir, { recursive: true });
   }
 
   private async copyIfNotExists(srcPath: string, destPath: string): Promise<void> {
-    if (existsSync(destPath)) {
-      // File already exists (user modified), skip to avoid overwriting
-      return;
+    try {
+      if (existsSync(destPath)) {
+        // File already exists (user modified), skip to avoid overwriting
+        return;
+      }
+      if (!existsSync(srcPath)) {
+        // Template file not exist, skip (optional template)
+        console.warn(`Template file ${srcPath} not found, skipping initialization`);
+        return;
+      }
+      // Read template and write atomically
+      const content = await readFile(srcPath);
+      await writeFile(destPath, content);
+    } catch (error) {
+      throw new Error(`Failed to copy template from ${srcPath} to ${destPath}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    if (!existsSync(srcPath)) {
-      // Template file not exist, skip (optional template)
-      return;
-    }
-    // Read template and write atomically
-    const content = await readFile(srcPath);
-    await writeFile(destPath, content);
   }
 }

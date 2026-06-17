@@ -10,7 +10,7 @@ server:
 
 redis:
   # Internal service address placeholder. Do not put password in url.
-  host: redis
+  host: redis.agent-runtime.svc.cluster.local
   port: 6379
   db: 0
   key: agent-runtime:user
