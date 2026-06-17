@@ -20,8 +20,8 @@ export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitiali
     // 2. Copy default templates only if files do NOT exist (atomic, never overwrite user files)
     // - {templatesRoot}/AGENTS.md → {workspaceRoot}/AGENTS.md
     await this.copyIfNotExists(`${templatesRoot}/AGENTS.md`, `${workspaceRoot}/AGENTS.md`);
-    // - {templatesRoot}/opencode.json → {workspaceRoot}/.opencode/opencode.json
-    await this.copyIfNotExists(`${templatesRoot}/opencode.json`, `${workspaceRoot}/.opencode/opencode.json`);
+    // - {templatesRoot}/.opencode/opencode.json → {workspaceRoot}/.opencode/opencode.json
+    await this.copyIfNotExists(`${templatesRoot}/.opencode/opencode.json`, `${workspaceRoot}/.opencode/opencode.json`);
   }
 
   private async ensureDir(dir: string): Promise<void> {

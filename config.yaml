@@ -20,8 +20,8 @@ redis:
   password: ""
 
 runtime:
-  # Replace with the final ArchAIHarness agent-runtime image when available.
-  image: ghcr.io/archaiharness/agent-runtime:latest
+  # Replace with the local agent-image when running in local Kubernetes.
+  image: agent-image:latest
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
