@@ -79,7 +79,7 @@ graph TD
 演进原则：
 
 - 保持已确认的用户 Agent 归属逻辑：`userId -> Agent`。
-- 保持已确认的 NAS 挂载逻辑：`{runtime.workdir}/{userId} -> /app`，OpenCode 用户级目录持久化到用户目录下的 `.runtime/opencode/`。
+- 保持已确认的 NAS 挂载逻辑：整个用户目录 `{runtime.workdir}/{userId}` 是一个 PV，`{runtime.workdir}/{userId}/runtime -> /app` (subPath)，`{runtime.workdir}/{userId}/global -> ~` (subPath)，OpenCode 默认路径自然匹配持久化。
 - 保持已确认的 Agent API 通用透明代理逻辑：去掉 `/agent` 前缀，保留 OpenCode 官方路径、查询参数、HTTP 方法和请求体。
 - OpenCode `directory` 是官方 query 参数，由调用方显式传入。
 - 当单集群 Agent Deployment 数量增长导致 Kubernetes Server API 压力上升时，通过新增可调度集群、调整集群调度权重或扩展 Namespace 容量分摊负载。
@@ -145,9 +145,14 @@ AgentWorkloadSpec 构建逻辑：
 - 根据用户归属生成 Agent 实例 ID、Deployment 名称、Service 名称和统一 Labels。
 - 根据调度结果写入目标 cluster、Namespace、资源规格和 Service 端口。
 - 从 `x-user-id` 读取用户标识，并按 `{runtime.workdir}/{userId}` 拼接用户 NAS 工作目录。
-- Agent 创建或重启前，初始化流程必须确保用户目录 `{runtime.workdir}/{userId}`、用户默认 `AGENTS.md`、用户默认 `.opencode/`、OpenCode 用户级持久化目录 `.runtime/opencode/config`、`.runtime/opencode/data` 与 `.runtime/opencode/cache` 均已存在。
-- 将 `{runtime.workdir}/{userId}` 挂载到 Agent 容器内固定工作目录 `/app`；用户默认项目规则和 OpenCode 配置通过根挂载自然成为 `/app/AGENTS.md` 与 `/app/.opencode`。
-- 将 `{runtime.workdir}/{userId}/.runtime/opencode/config`、`{runtime.workdir}/{userId}/.runtime/opencode/data` 与 `{runtime.workdir}/{userId}/.runtime/opencode/cache` 分别挂载到 `/root/.config/opencode`、`/root/.local/share/opencode` 与 `/root/.cache/opencode`。
+- Agent 创建或重启前，初始化流程必须确保完整目录结构存在：
+  - `{runtime.workdir}/{userId}/runtime/` + `{runtime.workdir}/{userId}/runtime/.opencode/`
+  - `{runtime.workdir}/{userId}/global/.config/opencode/`
+  - `{runtime.workdir}/{userId}/global/.local/share/opencode/`
+  - `{runtime.workdir}/{userId}/global/.cache/opencode/`
+- 整个用户目录 `{runtime.workdir}/{userId}` 是一个 PV，通过两个 subPath 分别挂载：
+  - `{runtime.workdir}/{userId}/runtime` → `/app`（用户项目工作目录，`AGENTS.md` + `.opencode/` 自然成为 `/app/AGENTS.md` + `/app/.opencode`）
+  - `{runtime.workdir}/{userId}/global` → `~`（OpenCode 默认查找路径正好匹配全局配置/data/cache）
 - 将上述镜像、端口、环境变量、卷、挂载路径和安全约束渲染为 `deploy.yaml`，作为创建或更新 Kubernetes Agent Deployment 的输入。
 - OpenCode Agent 启动命令、环境变量、容器端口和挂载路径使用服务预设参数。
 - Deployment 固定 `replicas = 1`，Service 作为 Agent API 代理目标。
@@ -230,10 +235,10 @@ OpenCode 配置加载规则：
 - OpenCode 项目级 `plugins`、`skills`、`agents`、`tools`、`.opencode` 等配置由 OpenCode 进程启动时加载，不是每次创建会话时动态重新加载。
 - 用户默认项目规则位于 `{runtime.workdir}/{userId}/AGENTS.md`，通过 `{runtime.workdir}/{userId} -> /app` 根挂载自然成为 `/app/AGENTS.md`。
 - 用户默认项目级 OpenCode 配置位于 `{runtime.workdir}/{userId}/.opencode`，通过根挂载自然成为 `/app/.opencode`。
-- OpenCode 用户级配置持久化到 `{runtime.workdir}/{userId}/.runtime/opencode/config`，挂载到 `/root/.config/opencode`。
-- OpenCode 用户级数据持久化到 `{runtime.workdir}/{userId}/.runtime/opencode/data`，挂载到 `/root/.local/share/opencode`，包含 `auth.json`、会话记录、索引、缓存等。
-- OpenCode 动态下载的 provider 包和插件缓存持久化到 `{runtime.workdir}/{userId}/.runtime/opencode/cache`，挂载到 `/root/.cache/opencode`，避免每次重启重新下载。
-- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `/root/.cache/opencode`，由 PVC 持久化；配置更新后需要重启 Agent 容器 / Pod 才能重新加载。
+- OpenCode 用户级配置持久化到 `{runtime.workdir}/{userId}/global/.config/opencode`，通过 subPath 挂载到 `~/.config/opencode`。
+- OpenCode 用户级数据持久化到 `{runtime.workdir}/{userId}/global/.local/share/opencode`，通过 subPath 挂载到 `~/.local/share/opencode`，包含 `auth.json`、会话记录、索引、缓存等。
+- OpenCode 动态下载的 provider 包和插件缓存持久化到 `{runtime.workdir}/{userId}/global/.cache/opencode`，通过 subPath 挂载到 `~/.cache/opencode`，避免每次重启重新下载。
+- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `~/.cache/opencode`，由 PVC 持久化；配置更新后需要重启 Agent 容器 / Pod 才能重新加载。
 - `agent-master` 只负责挂载路径约定和 OpenCode API 透明代理；具体如何在指定 directory 下应用项目规则，由 `agent-runtime` 的启动流程和 OpenCode 项目级配置约定实现。
 
 ### 5.5 回收删除流程
@@ -377,46 +382,56 @@ stateDiagram-v2
 
 NAS 用于承载用户级 OpenCode 持久化数据，包括：用户 Agent 工作目录、用户项目级配置、OpenCode 全局配置、全局数据和插件缓存。所有路径按 `x-user-id` 隔离，通过 Kubernetes PV/PVC 挂载到 Agent 容器。
 
+**设计思路：简洁两级目录**
+
+- 整个用户目录是一个 PV，`{runtime.workdir}/{userId}` 是用户根
+- 根下分两个顶层子目录，分别 subPath 挂载到容器不同位置：
+  - `runtime/` → 容器 `/app`（用户项目工作区，包含 `AGENTS.md` + `.opencode/`）
+  - `global/` → 容器 `~`（OpenCode 全局配置/data/cache 自然对应用户家目录）
+
 路径结构：
 
 ```text
 /nas/agent-master/
 └── users/
-    └── {userId}/
-        ├── AGENTS.md                    # 用户默认项目规则 → /app/AGENTS.md
-        ├── .opencode/                   # 用户项目级 OpenCode 配置 → /app/.opencode
-        │   ├── opencode.json            # 可通过 plugin 字段声明插件包名
-        │   ├── agents/
-        │   ├── commands/
-        │   ├── modes/
-        │   ├── plugins/
-        │   ├── skills/
-        │   ├── tools/
-        │   └── themes/
-        └── .runtime/
-            └── opencode/
-                ├── config/              # OpenCode 全局配置 → /root/.config/opencode
-                ├── data/                # OpenCode 全局数据（auth.json、会话、索引）→ /root/.local/share/opencode
-                └── cache/               # provider 包和插件缓存 → /root/.cache/opencode
+    └── {userId}/                     # {runtime.workdir}/{userId}
+        ├── runtime/                  # → subPath 挂载到容器 /app
+        │   ├── AGENTS.md            # 用户默认项目规则
+        │   └── .opencode/           # 用户项目级 OpenCode 配置
+        │       ├── opencode.json    # 可通过 plugin 字段声明插件包名
+        │       ├── agents/
+        │       ├── commands/
+        │       ├── modes/
+        │       ├── plugins/
+        │       ├── skills/
+        │       ├── tools/
+        │       └── themes/
+        └── global/                  # → subPath 挂载到容器 ~
+            └── .config/
+                └── opencode/       # OpenCode 全局配置 → ~/.config/opencode
+            └── .local/share/
+                └── opencode/       # OpenCode 全局数据 → ~/.local/share/opencode
+            └── .cache/
+                └── opencode/       # provider 包和插件缓存 → ~/.cache/opencode
 ```
 
 路径拼接与挂载映射：
 
-| 源路径 | 目标路径 | 说明 |
-|---|---|---|
-| `{runtime.workdir}/{userId}` | `/app` | 用户 Agent 工作目录；`userId` 来自上游注入的 `x-user-id`，覆盖镜像内 `/app` 是预期行为；根目录下的 `AGENTS.md` 与 `.opencode/` 自然作为 OpenCode 项目级配置生效。 |
-| `{runtime.workdir}/{userId}/.runtime/opencode/config` | `/root/.config/opencode` | OpenCode 用户级配置持久化目录，承接 provider/model/credential 等 OpenCode 自身运行配置。 |
-| `{runtime.workdir}/{userId}/.runtime/opencode/data` | `/root/.local/share/opencode` | OpenCode 用户级数据持久化目录，承接 `auth.json`、会话记录、索引、缓存等 OpenCode 自身运行数据。 |
-| `{runtime.workdir}/{userId}/.runtime/opencode/cache` | `/root/.cache/opencode` | OpenCode 动态下载的 provider 包和插件缓存目录，避免每次重启重新下载。 |
+| 源路径 (NAS) | 容器内路径 | 挂载方式 | 说明 |
+|---|---|---|---|
+| `{runtime.workdir}/{userId}/runtime` | `/app` | subPath | 用户**项目工作目录**，包含 `AGENTS.md` 与 `.opencode/` 项目级配置 |
+| `{runtime.workdir}/{userId}/global` | `~` | subPath | 用户**全局数据目录**，完全对应用户家目录，OpenCode 默认路径自然生效 |
+
+> 因为 `{runtime.workdir}/{userId}/global/.config/opencode` → `~/.config/opencode`，正好匹配 OpenCode 原生查找路径，**不需要修改 OpenCode 任何逻辑**。
 
 挂载规则：
 
 - `x-user-id` 是用户标识来源，用于拼接用户 NAS 工作目录。
-- 生产环境 NAS 通过 PV/PVC 暴露给 Kubernetes，Agent 容器通过 subPath 挂载用户专属目录；本地开发可用 hostPath 作为替代。
-- `runtime.workdir` 是用户 NAS 工作目录根路径；Kubernetes 启动 Agent 时，将 `{runtime.workdir}/{userId}` 挂载到容器内 `/app`。覆盖镜像内 `/app` 是预期行为，Agent 运行时以用户挂载目录为准。
-- 用户默认项目配置直接放在 `{runtime.workdir}/{userId}` 根目录下，其中 `AGENTS.md` 和 `.opencode/` 通过 `{runtime.workdir}/{userId} -> /app` 根挂载自然成为 `/app/AGENTS.md` 和 `/app/.opencode`。
-- OpenCode 用户级配置、数据、缓存必须分别持久化到 `config/`、`data/`、`cache/` 三个独立子目录，再分别挂载到对应的容器内路径。
-- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `/root/.cache/opencode`，由 PVC 持久化。
+- 生产环境：整个 `{runtime.workdir}/{userId}` 是一个 PV/PVC，通过 subPath 分别挂载 `runtime/` → `/app` 和 `global/` → `~`。
+- 本地开发：可用 hostPath 直接指向 NAS 目录作为替代。
+- 覆盖 `agent-image` 镜像内默认 `/app` 是预期行为，Agent 运行时以用户挂载目录为准。
+- OpenCode 默认查找 `~/.config/opencode`、`~/.local/share/opencode`、`~/.cache/opencode`，正好对应 NAS 上 `global/` 下路径，完美匹配不需要改动。
+- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `~/.cache/opencode`，由 PV 持久化。
 - Agent 创建或重启前，必须先初始化所有挂载依赖路径。
 - 用户项目配置、OpenCode 全局配置和插件缓存都是 Agent 启动时加载的配置；配置更新后需要重启 Agent 容器 / Pod 才能重新加载。
 - README 不记录真实 NAS 地址、真实用户路径或内部业务路径。
@@ -437,15 +452,24 @@ Kubernetes 的 `subPath` 挂载要求**源路径必须已经存在**。如果 NA
 1. **创建目录结构**（`mkdir -p`）：
    ```text
    {runtime.workdir}/{userId}/
-   ├── .opencode/
-   └── .runtime/opencode/
-       ├── config/
-       ├── data/
-       └── cache/
+   ├── runtime/                     # 对应容器 /app
+   │   ├── .opencode/               # 用户项目级 OpenCode 配置
+   │   │   └── opencode.json
+   │   └── AGENTS.md                # 用户默认项目规则
+   └── global/                      # 对应容器 ~
+       └── .config/
+           └── opencode/           # OpenCode 全局配置 → ~/.config/opencode
+       └── .local/share/
+           └── opencode/           # OpenCode 全局数据 → ~/.local/share/opencode
+       └── .cache/
+           └── opencode/           # provider 包和插件缓存 → ~/.cache/opencode
    ```
 
-2. **写入默认 `AGENTS.md`**（文件不存在时才写）：
-   模板内容由 master 内置的 `resources/default-agents.md` 提供：
+2. **从模板拷贝默认文件到 `runtime/` 目录**（文件不存在时才写）：
+   - `resources/default-agents.md` → `{runtime.workdir}/{userId}/runtime/AGENTS.md`
+   - `resources/default-opencode.json` → `{runtime.workdir}/{userId}/runtime/.opencode/opencode.json`
+
+   默认 `AGENTS.md` 模板内容：
    ```markdown
    # OpenCode Agent Rules
    
@@ -455,16 +479,26 @@ Kubernetes 的 `subPath` 挂载要求**源路径必须已经存在**。如果 NA
    - 配置变更需重启 Agent 生效
    ```
 
-3. **写入默认 `opencode.json`**（文件不存在时才写）：
-   模板内容由 master 内置的 `resources/default-opencode.json` 提供：
-   ```json
-   {
-     "$schema": "https://opencode.ai/config.json",
-     "model": "anthropic/claude-sonnet-4-5",
-     "small_model": "anthropic/claude-haiku-4-5",
-     "plugin": []
-   }
-   ```
+    默认 `opencode.json` 模板内容：
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "anthropic/claude-sonnet-4-5",
+      "small_model": "anthropic/claude-haiku-4-5",
+      "plugin": []
+    }
+    ```
+
+    模板已经预留 `plugin` 数组，用户后续可以直接添加场景化插件声明，例如：
+    ```json
+    "plugin": ["agent-plugin@git+https://github.com/ArchAIHarness/agent-plugin.git"]
+    ```
+    OpenCode 启动时会自动下载加载声明的插件，不需要修改平台核心代码。
+
+3. **创建三级 OpenCode 全局目录**（`mkdir -p` 确保存在）：
+   - `{runtime.workdir}/{userId}/global/.config/opencode/`
+   - `{runtime.workdir}/{userId}/global/.local/share/opencode/`
+   - `{runtime.workdir}/{userId}/global/.cache/opencode/`
 
 4. **权限统一设置**：确保所有目录和文件对 Agent 容器内的运行 uid/gid 可读可写。
 
@@ -475,8 +509,12 @@ Kubernetes 的 `subPath` 挂载要求**源路径必须已经存在**。如果 NA
 触发时机：`POST /runtime/restart` 时。
 
 操作范围：
-- **只检查 6 个目录是否存在**，不存在则创建
-- **绝对不写任何文件**（`AGENTS.md`、`opencode.json` 即使丢了也不恢复、不覆盖）
+- **只检查 7 个目录是否存在**，不存在则创建：
+  - `runtime/`、`runtime/.opencode/`
+  - `global/.config/opencode/`
+  - `global/.local/share/opencode/`
+  - `global/.cache/opencode/`
+- **绝对不写任何文件**（`AGENTS.md`、`opencode.json` 即使丢失也不恢复、不覆盖）
 - 不改权限
 
 ---
@@ -485,9 +523,9 @@ Kubernetes 的 `subPath` 挂载要求**源路径必须已经存在**。如果 NA
 - 初始化只发生在**新用户首次创建 Agent** 时，后续重启只做最轻量的目录检查
 - 所有文件写入操作必须带"不存在才创建"的原子语义（如 `O_EXCL` 标志或先检查 exists）
 - 用户后续修改的 `AGENTS.md`、`opencode.json` 永远不会被 master 覆盖
-- 平台级默认配置（如默认插件列表、默认 model 提供商）由上游控制面在初始化阶段写入到用户的 `opencode.json` 中，master 内置模板只提供最基础的骨架
+- 平台级默认配置（如默认插件列表、默认 model 提供商）由上游控制面在初始化完成后写入到用户的 `opencode.json` 中，master 内置模板只提供最基础的骨架
 - `cache/` 目录由 OpenCode 进程自行管理，初始化时只确保目录存在，不写入任何内容
-- `data/auth.json` 由 OpenCode 首次连接 provider 时自动生成，初始化流程绝不触碰
+- `data/auth.json` 由 OpenCode 首次连接 provider 时自动生成到 `global/.local/share/opencode/`，初始化流程绝不触碰
 
 ### 6.5 Kubernetes 资源标识
 
@@ -690,12 +728,14 @@ runtime.heartbeat
 OpenCode 配置加载规则：
 
 - OpenCode 项目级配置和用户级配置由 OpenCode 进程启动时加载，不是每次创建会话时动态重新加载。
-- 用户默认项目规则位于 `{runtime.workdir}/{userId}/AGENTS.md`，通过 `{runtime.workdir}/{userId} -> /app` 根挂载自然成为 `/app/AGENTS.md`。
-- 用户默认项目级 OpenCode 配置位于 `{runtime.workdir}/{userId}/.opencode`，通过根挂载自然成为 `/app/.opencode`。
-- OpenCode 用户级配置持久化到 `{runtime.workdir}/{userId}/.runtime/opencode/config`，挂载到 `/root/.config/opencode`。
-- OpenCode 用户级数据持久化到 `{runtime.workdir}/{userId}/.runtime/opencode/data`，挂载到 `/root/.local/share/opencode`，包含 `auth.json`、会话记录、索引、缓存等。
-- OpenCode 动态下载的 provider 包和插件缓存持久化到 `{runtime.workdir}/{userId}/.runtime/opencode/cache`，挂载到 `/root/.cache/opencode`，避免每次重启重新下载。
-- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `/root/.cache/opencode`，由 PVC 持久化。
+- 用户默认项目规则位于 `{runtime.workdir}/{userId}/runtime/AGENTS.md`，通过 `{runtime.workdir}/{userId}/runtime -> /app` subPath 挂载自然成为 `/app/AGENTS.md`。
+- 用户默认项目级 OpenCode 配置位于 `{runtime.workdir}/{userId}/runtime/.opencode`，通过挂载自然成为 `/app/.opencode`。
+- OpenCode 默认从 `~/.config/opencode`、`~/.local/share/opencode`、`~/.cache/opencode` 读取/写入全局配置、数据和缓存。
+- 我们通过 `{runtime.workdir}/{userId}/global -> ~` subPath 挂载，正好让这些路径对应到 NAS 上的持久化存储：
+  - `{runtime.workdir}/{userId}/global/.config/opencode` → `~/.config/opencode`（OpenCode 用户级全局配置）
+  - `{runtime.workdir}/{userId}/global/.local/share/opencode` → `~/.local/share/opencode`（OpenCode 用户级全局数据，包含 `auth.json`、会话记录、索引等）
+  - `{runtime.workdir}/{userId}/global/.cache/opencode` → `~/.cache/opencode`（OpenCode 动态下载的 provider 包和插件缓存，避免每次重启重新下载）
+- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `~/.cache/opencode`，由 PV 持久化。
 - 如果用户目录内容或 OpenCode 配置发生更新，需要重启 Agent 容器 / Pod，让 OpenCode 进程重新启动后加载新配置。
 
 代理规则：
@@ -849,7 +889,7 @@ kubernetes:
 | `runtime.image` | OpenCode Agent 镜像。 |
 | `runtime.ttl` | Agent 租约有效期，连接存在时续约到 1 小时。 |
 | `runtime.port` | OpenCode Agent 容器监听端口，当前与 `agent-runtime` 镜像约定为 `4096`，Agent 需监听 `0.0.0.0` 以便 Service 访问。 |
-| `runtime.workdir` | 用户 NAS 工作目录根路径；Kubernetes 启动 Agent 时拼接 `{runtime.workdir}/{userId}` 并挂载到容器内 `/app`。用户默认项目规则和 OpenCode 配置直接位于 `{runtime.workdir}/{userId}/AGENTS.md` 与 `{runtime.workdir}/{userId}/.opencode/`，通过根挂载自然成为 `/app/AGENTS.md` 与 `/app/.opencode/`；OpenCode 用户级目录通过 `.runtime/opencode/config`、`.runtime/opencode/data`、`.runtime/opencode/cache` 持久化。 |
+ | `runtime.workdir` | 用户 NAS 工作目录根路径；Kubernetes 启动 Agent 时，整个 `{runtime.workdir}/{userId}` 是用户 PV，通过两个 subPath 分别挂载：<br>- `{runtime.workdir}/{userId}/runtime` → 容器 `/app`（用户项目工作目录，包含 `AGENTS.md` + `.opencode/`）<br>- `{runtime.workdir}/{userId}/global` → 容器 `~`（OpenCode 全局配置/data/cache 对应用户主目录 `.config/`、`.local/share/`、`.cache/`，正好匹配 OpenCode 默认查找路径，不需要修改代码） |
 | `kubernetes.cluster` | 默认 Kubernetes 集群逻辑名。 |
 | `kubernetes.namespace` | 默认 Agent Namespace。 |
 | `kubernetes.clusters[]` | 可调度 Kubernetes 集群配置。 |
@@ -862,20 +902,20 @@ kubernetes:
 
 `deploy.yaml` 必须体现以下挂载关系：
 
-| 源路径 | 容器路径 | 说明 |
-|---|---|---|
-| `{runtime.workdir}/{userId}` | `/app` | 用户 Agent 工作目录；覆盖镜像内 `/app` 是预期行为；根目录下 `AGENTS.md` 与 `.opencode/` 作为用户默认项目配置自然生效。 |
-| `{runtime.workdir}/{userId}/.runtime/opencode/config` | `/root/.config/opencode` | OpenCode 用户级配置持久化目录。 |
-| `{runtime.workdir}/{userId}/.runtime/opencode/data` | `/root/.local/share/opencode` | OpenCode 用户级数据持久化目录（auth.json、会话、索引等）。 |
-| `{runtime.workdir}/{userId}/.runtime/opencode/cache` | `/root/.cache/opencode` | OpenCode provider 包和插件缓存目录。 |
+整个用户目录 `{runtime.workdir}/{userId}` 是一个 PV/PVC，通过两个 subPath 分别挂载：
+
+| 源路径 (NAS) | 容器内路径 | 挂载方式 | 说明 |
+|---|---|---|---|
+| `{runtime.workdir}/{userId}/runtime` | `/app` | subPath | 用户**项目工作目录**；覆盖镜像内 `/app` 是预期行为；`AGENTS.md` 与 `.opencode/` 作为用户默认项目配置自然生效。 |
+| `{runtime.workdir}/{userId}/global` | `~` | subPath | 用户**全局数据目录**，完整对应用户主目录结构：<br>- `global/.config/opencode` → `~/.config/opencode` <br>- `global/.local/share/opencode` → `~/.local/share/opencode` <br>- `global/.cache/opencode` → `~/.cache/opencode` <br>正好匹配 OpenCode 默认查找路径，**不需要修改 OpenCode 任何代码**。
 
 渲染约束：
 
 - `deploy.yaml` 中的用户路径必须来自 `x-user-id` 和服务端配置拼接，不接受客户端传入任意挂载路径。
-- `{runtime.workdir}/{userId} -> /app` 是根挂载；用户默认项目配置通过 `{runtime.workdir}/{userId}/AGENTS.md` 和 `{runtime.workdir}/{userId}/.opencode/` 自然出现在 `/app/AGENTS.md` 与 `/app/.opencode/`。
-- OpenCode 用户级配置、数据、缓存目录必须分别持久化到 `config/`、`data/`、`cache/` 三个独立子目录，再分别挂载到对应的容器内路径。
+- 整个 `{runtime.workdir}/{userId}` 是一个 PV，分两个 subPath 挂载，结构清晰不冲突。
+- OpenCode 默认查找 `~/.config/opencode` 等路径，正好对应 NAS `global/` 下的路径，完美匹配。
 - 使用 subPath 挂载时，源目录和目标父目录必须由初始化流程预先创建，避免 Kubernetes 因挂载目标不存在而启动失败。
-- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `/root/.cache/opencode`。
+- 平台场景化能力通过 OpenCode 原生 `plugin` 机制实现：用户在 `/app/.opencode/opencode.json` 的 `plugin` 字段声明插件包名，OpenCode 启动时下载插件并缓存到 `~/.cache/opencode`。
 - `deploy.yaml` 不保存 kubeconfig、Token、证书、Cookie、账号密码或明文密钥。
 - 真实凭证应通过 ServiceAccount、Secret、受控环境变量或受控挂载文件注入。
 
