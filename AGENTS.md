@@ -118,3 +118,7 @@ pkill -f "kubectl port-forward" && sleep 1 && nohup kubectl -n agent-master port
 # 如果 service 不通，直接端口转发到 pod
 POD=$(kubectl -n agent-master get pods -l app=agent-master -o name | head -1) && pkill -f "kubectl port-forward" && sleep 1 && nohup kubectl -n agent-master port-forward $POD 3002:3000 > /dev/null 2>&1 &
 ```
+## 7. Git 操作规则
+
+- 必须由用户告知可以操作git后才能执行git提交推送操作。
+- 没有用户明确许可，不得私自执行git提交推送操作。
