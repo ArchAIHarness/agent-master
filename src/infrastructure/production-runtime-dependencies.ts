@@ -7,6 +7,7 @@ import { InMemoryRuntimeEventBus } from "./fake/in-memory-runtime-event-bus";
 import { KubernetesFetchHttpClient } from "./kubernetes/kubernetes-http-client";
 import { KubernetesRestWorkloadAdapter, type KubernetesHttpClient } from "./kubernetes/kubernetes-rest-workload-adapter";
 import { RuntimeServiceFetchProxy } from "./proxy/runtime-service-fetch-proxy";
+import { RuntimeServiceWebSocketProxy } from "./proxy/runtime-service-websocket-proxy";
 import type { ProductionConfig } from "./production-config";
 import { loadProductionConfig } from "./production-config";
 import { IORedisRuntimeClient } from "./redis/ioredis-runtime-client";
@@ -56,6 +57,7 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     templatesRoot: config.init.templatesRoot,
     ttlSeconds: config.runtime.ttl,
     userWorkspaceInitializer,
+    websocket: new RuntimeServiceWebSocketProxy({ namespace: config.kubernetes.namespace }),
     workload: new KubernetesRestWorkloadAdapter({
       http: kubernetesHttp,
       ...(maxRuntimePerNamespace === undefined ? {} : { maxRuntimePerNamespace }),

@@ -1,6 +1,7 @@
 import type { RuntimeClock } from "./runtime-clock";
 import type { RuntimeEventBus } from "./runtime-event-bus";
 import type { RuntimeAgentProxyPort } from "./runtime-agent-proxy-port";
+import type { RuntimeAgentWebSocketPort } from "./runtime-agent-websocket-port";
 import type { UserWorkspaceInitializer } from "./user-workspace-initializer";
 import type { RuntimeStore } from "./runtime-store";
 import type { RuntimeWorkloadPort } from "./runtime-workload-port";
@@ -17,6 +18,7 @@ export interface RuntimeDependenciesOptions {
   readonly templatesRoot: string;
   readonly ttlSeconds: number;
   readonly userWorkspaceInitializer: UserWorkspaceInitializer;
+  readonly websocket?: RuntimeAgentWebSocketPort;
   readonly workload: RuntimeWorkloadPort;
   readonly workdirRoot: string;
 }

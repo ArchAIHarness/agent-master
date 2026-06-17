@@ -154,7 +154,8 @@ describe("Runtime application services", () => {
 
     await expect(commandService.createRuntime({ userId: "user-a" })).rejects.toThrow("service creation failed");
 
-    expect(workload.deletedDeployments).toEqual(["opencode-rt-000001"]);
+    expect(workload.deletedDeployments).toHaveLength(1);
+    expect(workload.deletedDeployments[0]).toMatch(/^agent-rt-user-a-[a-z0-9]{4}$/);
     expect(eventBus.published.map((event) => event.type)).toContain("runtime.failed");
   });
 

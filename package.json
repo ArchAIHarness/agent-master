@@ -12,12 +12,15 @@
   },
   "dependencies": {
     "@fastify/sensible": "latest",
+    "@fastify/websocket": "^11.2.0",
     "fastify": "latest",
     "ioredis": "^5.11.1",
+    "ws": "^8.21.0",
     "zod": "latest"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/ws": "^8.18.1",
     "typescript": "latest"
   }
 }
