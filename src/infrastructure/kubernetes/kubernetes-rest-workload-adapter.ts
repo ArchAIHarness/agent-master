@@ -1,5 +1,4 @@
 import type { RuntimeSnapshot } from "../../domain/runtime/runtime";
-import type { RuntimeAgentPresetRegistry } from "../../domain/runtime/runtime-policy";
 import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../ports/runtime-workload-port";
 
 export interface KubernetesHttpClient {
@@ -354,7 +353,6 @@ function isDeploymentReady(value: unknown): boolean {
 }
 
 function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
-  const agentPresetSourceMounts = buildAgentPresetSourceVolumeMounts(spec.agentPresets);
   return {
     apiVersion: "apps/v1",
     kind: "Deployment",
@@ -372,7 +370,7 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
           terminationGracePeriodSeconds: 60,
           initContainers: [
             {
-              command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand(spec.agentPresets)],
+              command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand()],
               image: "busybox:1.36",
               name: "prepare-user-workdir",
               volumeMounts: [
@@ -380,7 +378,18 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
                   mountPath: "/app",
                   name: "user-workdir",
                 },
-                ...agentPresetSourceMounts,
+                {
+                  mountPath: "/root/.local/share/opencode",
+                  name: "opencode-data",
+                },
+                {
+                  mountPath: "/root/.config/opencode",
+                  name: "opencode-config",
+                },
+                {
+                  mountPath: "/root/.cache/opencode",
+                  name: "opencode-cache",
+                },
               ],
             },
           ],
@@ -415,11 +424,15 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
                 },
                 {
                   mountPath: "/root/.local/share/opencode",
-                  name: "opencode-share",
+                  name: "opencode-data",
                 },
                 {
                   mountPath: "/root/.config/opencode",
                   name: "opencode-config",
+                },
+                {
+                  mountPath: "/root/.cache/opencode",
+                  name: "opencode-cache",
                 },
               ],
             },
@@ -434,10 +447,10 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
             },
             {
               hostPath: {
-                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/share`,
+                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/data`,
                 type: "DirectoryOrCreate",
               },
-              name: "opencode-share",
+              name: "opencode-data",
             },
             {
               hostPath: {
@@ -446,7 +459,13 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
               },
               name: "opencode-config",
             },
-            ...buildAgentPresetVolumes(spec.agentPresets),
+            {
+              hostPath: {
+                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/cache`,
+                type: "DirectoryOrCreate",
+              },
+              name: "opencode-cache",
+            },
           ],
         },
       },
@@ -454,21 +473,13 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
   };
 }
 
-function buildPrepareUserWorkdirCommand(agentPresets: RuntimeAgentPresetRegistry): string {
+function buildPrepareUserWorkdirCommand(): string {
   const commands = [
     "mkdir -p /app/.opencode",
-    "touch /app/AGENTS.md",
-    "mkdir -p /app/.runtime/opencode/share",
+    "mkdir -p /app/.runtime/opencode/data",
     "mkdir -p /app/.runtime/opencode/config",
+    "mkdir -p /app/.runtime/opencode/cache",
   ];
-  for (const preset of Object.keys(agentPresets)) {
-    const presetTargetPath = `/app/${preset}`;
-    const presetSourcePath = `/agent-preset-config/${preset}`;
-    commands.push(`mkdir -p ${quoteShellArg(presetTargetPath)}`);
-    commands.push(`mkdir -p ${quoteShellArg(`${presetTargetPath}/.opencode`)}`);
-    commands.push(`cp ${quoteShellArg(`${presetSourcePath}/AGENTS.md`)} ${quoteShellArg(`${presetTargetPath}/AGENTS.md`)}`);
-    commands.push(`cp -R ${quoteShellArg(`${presetSourcePath}/.opencode/.`)} ${quoteShellArg(`${presetTargetPath}/.opencode/`)}`);
-  }
   return commands.join(" && ");
 }
 
@@ -514,24 +525,6 @@ function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
       type: "ClusterIP",
     },
   };
-}
-
-function buildAgentPresetSourceVolumeMounts(agentPresets: RuntimeAgentPresetRegistry): unknown[] {
-  return Object.keys(agentPresets).map((preset) => ({
-    mountPath: `/agent-preset-config/${preset}`,
-    name: `agent-preset-${preset}-source`,
-    readOnly: true,
-  }));
-}
-
-function buildAgentPresetVolumes(agentPresets: RuntimeAgentPresetRegistry): unknown[] {
-  return Object.entries(agentPresets).map(([preset, path]) => ({
-    hostPath: {
-      path,
-      type: "Directory",
-    },
-    name: `agent-preset-${preset}-source`,
-  }));
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

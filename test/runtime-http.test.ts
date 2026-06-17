@@ -29,10 +29,6 @@ function buildRuntimeApp() {
       proxy,
       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
       runtimePort: 4096,
-      agentPresets: {
-        coding: "/nas/agent-master/agent-presets/coding",
-        review: "/nas/agent-master/agent-presets/review",
-      },
       store,
       ttlSeconds: 3600,
       workload,

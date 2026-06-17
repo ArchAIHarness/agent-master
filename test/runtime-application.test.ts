@@ -17,10 +17,6 @@ function buildServices() {
   const store = new InMemoryRuntimeStore();
   const workload = new FakeRuntimeWorkloadAdapter();
   const clock = new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z"));
-  const agentPresets = {
-    coding: "/nas/agent-master/agent-presets/coding",
-    review: "/nas/agent-master/agent-presets/review",
-  };
   const commandService = new RuntimeCommandService({
     clock,
     cluster: "default",
@@ -28,7 +24,6 @@ function buildServices() {
     namespace: "agent-runtime",
     runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
     runtimePort: 4096,
-    agentPresets,
     store,
     ttlSeconds: 3600,
     workload,
@@ -142,18 +137,17 @@ describe("Runtime application services", () => {
       review: "/nas/agent-master/agent-presets/review",
     };
     const commandService = new RuntimeCommandService({
-      clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
-      cluster: "default",
-      eventBus,
-      namespace: "agent-runtime",
-      runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
-      runtimePort: 4096,
-      agentPresets,
-      store,
-      ttlSeconds: 3600,
-      workload,
-      workdirRoot: "/nas/agent-master/users",
-    });
+       clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
+       cluster: "default",
+       eventBus,
+       namespace: "agent-runtime",
+       runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
+       runtimePort: 4096,
+       store,
+       ttlSeconds: 3600,
+       workload,
+       workdirRoot: "/nas/agent-master/users",
+     });
 
     await expect(commandService.createRuntime({ userId: "user-a" })).rejects.toThrow("service creation failed");
 

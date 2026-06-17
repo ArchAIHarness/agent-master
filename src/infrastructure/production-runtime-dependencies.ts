@@ -43,7 +43,6 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
   const maxRuntimePerNamespace = resolveMaxRuntimePerNamespace(config);
 
   return {
-    agentPresets: config.runtime.agentPresets,
     clock: new SystemRuntimeClock(),
     cluster: config.kubernetes.cluster,
     eventBus: new InMemoryRuntimeEventBus(),
