@@ -23,15 +23,8 @@ runtime:
   # Replace with the final ArchAIHarness agent-runtime image when available.
   image: ghcr.io/archaiharness/agent-runtime:latest
   ttl: 3600
-  timeout: 60000
   port: 4096
   workdir: /nas/agent-master/users
-  agentPresets:
-    coding: /nas/agent-master/agent-presets/coding
-    review: /nas/agent-master/agent-presets/review
-
-nas:
-  path: /nas/agent-master
 
 kubernetes:
   cluster: default

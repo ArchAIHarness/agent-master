@@ -1,10 +1,8 @@
 import type { RuntimeSnapshot } from "../domain/runtime/runtime";
-import type { RuntimeAgentPresetRegistry } from "../domain/runtime/runtime-policy";
 
 export interface RuntimeWorkloadSpec {
   readonly runtime: RuntimeSnapshot;
   readonly image: string;
-  readonly agentPresets: RuntimeAgentPresetRegistry;
 }
 
 export interface RuntimeCapacityCheckInput {
