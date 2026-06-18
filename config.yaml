@@ -25,6 +25,9 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  # Runtime Deployment storage must use one PVC plus subPath mounts. hostPath is forbidden.
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
   # WebUI proxy. Leave webuiPort empty for headless agent-image. Set to 3000
   # when using agent-image-webui (OpenCode + AionUi). The Service of the
   # runtime Deployment must expose this port too.

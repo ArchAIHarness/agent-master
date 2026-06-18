@@ -8,6 +8,9 @@ export interface KubernetesHttpClient {
 export interface KubernetesRestWorkloadAdapterOptions {
   readonly http: KubernetesHttpClient;
   readonly maxRuntimePerNamespace?: number;
+  readonly workspacePvcClaimName?: string;
+  readonly workspacePvcSubPathRoot?: string;
+  readonly webuiPort?: number;
   readonly readyPollIntervalMs?: number;
   readonly readyTimeoutMs?: number;
 }
@@ -86,7 +89,7 @@ export class KubernetesRestWorkloadAdapter implements RuntimeWorkloadPort {
 
   async createDeployment(spec: RuntimeWorkloadSpec): Promise<void> {
     await this.options.http.request({
-      body: buildDeploymentManifest(spec),
+      body: buildDeploymentManifest(spec, this.options),
       method: "POST",
       path: `/apis/apps/v1/namespaces/${spec.runtime.namespace}/deployments`,
     });
@@ -94,7 +97,7 @@ export class KubernetesRestWorkloadAdapter implements RuntimeWorkloadPort {
 
   async createService(spec: RuntimeWorkloadSpec): Promise<void> {
     await this.options.http.request({
-      body: buildServiceManifest(spec.runtime),
+      body: buildServiceManifest(spec.runtime, this.options),
       method: "POST",
       path: `/api/v1/namespaces/${spec.runtime.namespace}/services`,
     });
@@ -364,7 +367,8 @@ function isDeploymentReady(value: unknown): boolean {
   return availableReplicas >= 1 && readyReplicas >= 1 && (generation === undefined || observedGeneration === generation);
 }
 
-function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
+function buildDeploymentManifest(spec: RuntimeWorkloadSpec, options: KubernetesRestWorkloadAdapterOptions): unknown {
+  const volumeMounts = buildUserStorageVolumeMounts(spec.runtime.userId, options);
   return {
     apiVersion: "apps/v1",
     kind: "Deployment",
@@ -381,30 +385,13 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
         spec: {
           terminationGracePeriodSeconds: 60,
            initContainers: [
-             {
-               command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand()],
-               image: "busybox:1.36",
-               imagePullPolicy: "IfNotPresent",
-               name: "prepare-user-workdir",
-              volumeMounts: [
-                {
-                  mountPath: "/app",
-                  name: "user-workdir",
-                },
-                {
-                  mountPath: "/root/.local/share/opencode",
-                  name: "opencode-data",
-                },
-                {
-                  mountPath: "/root/.config/opencode",
-                  name: "opencode-config",
-                },
-                {
-                  mountPath: "/root/.cache/opencode",
-                  name: "opencode-cache",
-                },
-              ],
-            },
+              {
+                command: ["/bin/sh", "-c", buildPrepareUserWorkdirCommand()],
+                image: "busybox:1.36",
+                imagePullPolicy: "IfNotPresent",
+                name: "prepare-user-workdir",
+               volumeMounts,
+             },
           ],
            containers: [
              {
@@ -431,54 +418,13 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
                   memory: runtimeResourceRequest.memoryText,
                 },
               },
-              volumeMounts: [
-                {
-                  mountPath: "/app",
-                  name: "user-workdir",
-                },
-                {
-                  mountPath: "/root/.local/share/opencode",
-                  name: "opencode-data",
-                },
-                {
-                  mountPath: "/root/.config/opencode",
-                  name: "opencode-config",
-                },
-                {
-                  mountPath: "/root/.cache/opencode",
-                  name: "opencode-cache",
-                },
-              ],
+              volumeMounts,
             },
           ],
           volumes: [
             {
-              hostPath: {
-                path: spec.runtime.workspaceRootPath,
-                type: "DirectoryOrCreate",
-              },
-              name: "user-workdir",
-            },
-            {
-              hostPath: {
-                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/data`,
-                type: "DirectoryOrCreate",
-              },
-              name: "opencode-data",
-            },
-            {
-              hostPath: {
-                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/config`,
-                type: "DirectoryOrCreate",
-              },
-              name: "opencode-config",
-            },
-            {
-              hostPath: {
-                path: `${spec.runtime.workspaceRootPath}/.runtime/opencode/cache`,
-                type: "DirectoryOrCreate",
-              },
-              name: "opencode-cache",
+              name: "user-storage",
+              persistentVolumeClaim: { claimName: resolveWorkspacePvcClaimName(options) },
             },
           ],
         },
@@ -487,18 +433,48 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
   };
 }
 
+function buildUserStorageVolumeMounts(userId: string, options: KubernetesRestWorkloadAdapterOptions): Array<Record<string, string>> {
+  const subPathRoot = normalizeSubPathRoot(resolveWorkspacePvcSubPathRoot(options));
+  return [
+    {
+      mountPath: "/app",
+      name: "user-storage",
+      subPath: `${subPathRoot}/${userId}/runtime`,
+    },
+    {
+      mountPath: "/root",
+      name: "user-storage",
+      subPath: `${subPathRoot}/${userId}/global`,
+    },
+  ];
+}
+
+function resolveWorkspacePvcClaimName(options: KubernetesRestWorkloadAdapterOptions): string {
+  if (!options.workspacePvcClaimName) {
+    throw new Error("runtime.workspacePvcClaimName is required for Runtime Deployment PVC volume");
+  }
+  return options.workspacePvcClaimName;
+}
+
+function resolveWorkspacePvcSubPathRoot(options: KubernetesRestWorkloadAdapterOptions): string {
+  if (!options.workspacePvcSubPathRoot) {
+    throw new Error("runtime.workspacePvcSubPathRoot is required for Runtime Deployment PVC subPath mounts");
+  }
+  return options.workspacePvcSubPathRoot;
+}
+
+function normalizeSubPathRoot(value: string): string {
+  return value.replace(/^\/+|\/+$/g, "");
+}
+
 function buildPrepareUserWorkdirCommand(): string {
   const commands = [
     "mkdir -p /app/.opencode",
-    "mkdir -p /app/.runtime/opencode/data",
-    "mkdir -p /app/.runtime/opencode/config",
-    "mkdir -p /app/.runtime/opencode/cache",
+    "mkdir -p /root/.config/opencode",
+    "mkdir -p /root/.local/share/opencode",
+    "mkdir -p /root/.cache/opencode",
   ];
   return commands.join(" && ");
-}
-
-function quoteShellArg(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function buildOpenCodeStartupCommand(targetPort: number): string {
@@ -518,7 +494,7 @@ function buildOpenCodeStartupCommand(targetPort: number): string {
   ].join("; ");
 }
 
-function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
+function buildServiceManifest(runtime: RuntimeSnapshot, options: KubernetesRestWorkloadAdapterOptions): unknown {
   return {
     apiVersion: "v1",
     kind: "Service",
@@ -534,6 +510,15 @@ function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
           port: runtime.servicePort,
           targetPort: runtime.targetPort,
         },
+        ...(options.webuiPort === undefined
+          ? []
+          : [
+              {
+                name: "webui-http",
+                port: options.webuiPort,
+                targetPort: options.webuiPort,
+              },
+            ]),
       ],
       selector: runtime.podSelector,
       type: "ClusterIP",
