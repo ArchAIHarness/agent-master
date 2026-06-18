@@ -241,16 +241,18 @@ describe("KubernetesRestWorkloadAdapter", () => {
     const runtimeContainer = deployment.spec.template.spec.containers[0];
     const service = http.requests[1]?.body as Record<string, any>;
 
+    expect(runtimeContainer.command).toBeUndefined();
+    expect(runtimeContainer.args).toBeUndefined();
     expect(runtimeContainer.ports).toEqual(
       expect.arrayContaining([
         { containerPort: 4096, name: "opencode-http" },
-        { containerPort: 3000, name: "agent-webui-http" },
+        { containerPort: 3000, name: "webui-http" },
       ]),
     );
     expect(service.spec.ports).toEqual(
       expect.arrayContaining([
         { name: "opencode-http", port: 4096, targetPort: 4096 },
-        { name: "agent-webui-http", port: 3000, targetPort: 3000 },
+        { name: "webui-http", port: 3000, targetPort: 3000 },
       ]),
     );
   });

@@ -408,9 +408,9 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
           ],
            containers: [
              {
-               args: [buildOpenCodeStartupCommand(spec.runtime.targetPort)],
-               command: ["/bin/sh", "-c"],
-               image: spec.image,
+                ...buildRuntimeStartupOverride(spec),
+                image: spec.image,
+
                imagePullPolicy: "IfNotPresent",
                name: "opencode-runtime",
                 ports: buildContainerPorts(spec),
@@ -502,6 +502,16 @@ function quoteShellArg(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+function buildRuntimeStartupOverride(spec: RuntimeWorkloadSpec): { command?: string[]; args?: string[] } {
+  if (spec.agentWebuiPort !== undefined) {
+    return {};
+  }
+  return {
+    args: [buildOpenCodeStartupCommand(spec.runtime.targetPort)],
+    command: ["/bin/sh", "-c"],
+  };
+}
+
 function buildOpenCodeStartupCommand(targetPort: number): string {
   const command = `opencode web --port ${targetPort} --hostname 0.0.0.0`;
   return [
@@ -522,7 +532,7 @@ function buildOpenCodeStartupCommand(targetPort: number): string {
 function buildContainerPorts(spec: RuntimeWorkloadSpec): Array<{ containerPort: number; name: string }> {
   return [
     { containerPort: spec.runtime.targetPort, name: "opencode-http" },
-    ...(spec.agentWebuiPort === undefined ? [] : [{ containerPort: spec.agentWebuiPort, name: "agent-webui-http" }]),
+    ...(spec.agentWebuiPort === undefined ? [] : [{ containerPort: spec.agentWebuiPort, name: "webui-http" }]),
   ];
 }
 
@@ -547,7 +557,7 @@ function buildServiceManifest(spec: RuntimeWorkloadSpec): unknown {
           ? []
           : [
               {
-                name: "agent-webui-http",
+                name: "webui-http",
                 port: spec.agentWebuiPort,
                 targetPort: spec.agentWebuiPort,
               },
