@@ -11,6 +11,7 @@ import { FakeRuntimeAgentProxy } from "../src/infrastructure/fake/fake-runtime-a
 import type { RuntimeSnapshot } from "../src/domain/runtime/runtime";
 import { FakeRuntimeWorkloadAdapter } from "../src/infrastructure/fake/fake-runtime-workload-adapter";
 import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../src/ports/runtime-workload-port";
+import type { UserWorkspaceInitializer } from "../src/ports/user-workspace-initializer";
 import { FixedRuntimeClock } from "../src/infrastructure/fake/fixed-runtime-clock";
 
 function buildServices() {
@@ -109,6 +110,35 @@ describe("Runtime application services", () => {
     ]);
   });
 
+  test("restart only ensures workspace directories and never copies templates", async () => {
+    const eventBus = new InMemoryRuntimeEventBus();
+    const store = new InMemoryRuntimeStore();
+    const workload = new FakeRuntimeWorkloadAdapter();
+    const userWorkspaceInitializer = new RecordingUserWorkspaceInitializer();
+    const commandService = new RuntimeCommandService({
+      clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
+      cluster: "default",
+      eventBus,
+      namespace: "agent-runtime",
+      runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
+      runtimePort: 4096,
+      store,
+      templatesRoot: "./resources/templates",
+      ttlSeconds: 3600,
+      userWorkspaceInitializer,
+      workload,
+      workdirRoot: "/nas/agent-master/users",
+    });
+    await commandService.createRuntime({ userId: "user-a" });
+    userWorkspaceInitializer.clear();
+
+    await commandService.restartRuntime({ reason: "reload-opencode-config", userId: "user-a" });
+
+    expect(userWorkspaceInitializer.initializeCalls).toEqual([]);
+    expect(userWorkspaceInitializer.ensureDirectoriesCalls).toEqual(["/nas/agent-master/users/user-a"]);
+    expect(workload.restartedDeployments).toHaveLength(1);
+  });
+
   test("emits heartbeat without binding each heartbeat to TTL renewal", async () => {
     const { commandService, eventBus, eventStreamService, queryService } = buildServices();
     await commandService.createRuntime({ userId: "user-a" });
@@ -202,6 +232,24 @@ describe("Runtime application services", () => {
     expect(eventBus.published.map((event) => event.type)).toEqual(["runtime.ttl.extended"]);
   });
 });
+
+class RecordingUserWorkspaceInitializer implements UserWorkspaceInitializer {
+  readonly ensureDirectoriesCalls: string[] = [];
+  readonly initializeCalls: Array<{ templatesRoot: string; workspaceRoot: string }> = [];
+
+  async initialize(workspaceRoot: string, templatesRoot: string): Promise<void> {
+    this.initializeCalls.push({ templatesRoot, workspaceRoot });
+  }
+
+  async ensureDirectories(workspaceRoot: string): Promise<void> {
+    this.ensureDirectoriesCalls.push(workspaceRoot);
+  }
+
+  clear(): void {
+    this.ensureDirectoriesCalls.length = 0;
+    this.initializeCalls.length = 0;
+  }
+}
 
 class ServiceFailingWorkloadAdapter implements RuntimeWorkloadPort {
   readonly deletedDeployments: string[] = [];

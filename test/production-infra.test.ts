@@ -46,6 +46,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
 init:
   templatesRoot: ./test/fixtures/templates
 kubernetes:
@@ -66,6 +68,10 @@ kubernetes:
       key: "agent-runtime:user",
       password: "",
       port: 6379,
+    });
+    expect(config.runtime).toMatchObject({
+      workspacePvcClaimName: "agent-runtime-nas",
+      workspacePvcSubPathRoot: "agent-master/users",
     });
   });
 });
@@ -92,7 +98,7 @@ describe("RedisRuntimeStore", () => {
 describe("KubernetesRestWorkloadAdapter", () => {
   test("checks namespace, node readiness, quotas, limits, pod distribution and warnings before scheduling", async () => {
     const http = new RecordingKubernetesHttpClient();
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -110,7 +116,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("rejects capacity when node has memory pressure", async () => {
     const http = new RecordingKubernetesHttpClient({ nodeMemoryPressure: true });
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -119,7 +125,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("rejects capacity when namespace quota has no remaining service capacity", async () => {
     const http = new RecordingKubernetesHttpClient({ quotaServicesHard: "1", quotaServicesUsed: "1" });
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -128,7 +134,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("rejects capacity when limit range maximum is below runtime memory request", async () => {
     const http = new RecordingKubernetesHttpClient({ limitMaxMemory: "128Mi" });
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -137,7 +143,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("rejects capacity when namespace runtime distribution reaches maxRuntime", async () => {
     const http = new RecordingKubernetesHttpClient({ runtimeDeploymentCount: 2 });
-    const adapter = new KubernetesRestWorkloadAdapter({ http, maxRuntimePerNamespace: 2 });
+    const adapter = createKubernetesAdapter(http, { maxRuntimePerNamespace: 2 });
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -146,7 +152,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("rejects capacity when runtime deployment has unavailable condition", async () => {
     const http = new RecordingKubernetesHttpClient({ deploymentUnavailable: true });
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -155,7 +161,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("rejects capacity when namespace quota has no remaining runtime pod capacity", async () => {
     const http = new RecordingKubernetesHttpClient({ quotaPodsHard: "1", quotaPodsUsed: "1" });
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
 
@@ -164,7 +170,7 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("creates deployment and service manifests through Kubernetes REST API", async () => {
     const http = new RecordingKubernetesHttpClient();
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = createKubernetesAdapter(http);
 
     await adapter.createDeployment({ image: "agent-runtime:local", runtime });
     await adapter.createService({ image: "agent-runtime:local", runtime });
@@ -191,28 +197,25 @@ describe("KubernetesRestWorkloadAdapter", () => {
     expect(http.requests[3]?.contentType).toBe("application/strategic-merge-patch+json");
     expect(initContainer).toMatchObject({ name: "prepare-user-workdir" });
     expect(initCommand).toContain("mkdir -p /app/.opencode");
-    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/data");
-    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/config");
-    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/cache");
+    expect(initCommand).toContain("mkdir -p /root/.config/opencode");
+    expect(initCommand).toContain("mkdir -p /root/.local/share/opencode");
+    expect(initCommand).toContain("mkdir -p /root/.cache/opencode");
+    expect(initCommand).not.toContain("/app/.runtime/opencode");
     expect(runtimeContainer.command).toEqual(["/bin/sh", "-c"]);
     expect(runtimeContainer.args[0]).toContain("opencode web --port 4096 --hostname 0.0.0.0");
     expect(runtimeContainer.args[0]).toContain("quarantine");
-    expect(runtimeContainer.volumeMounts).toEqual(
-      expect.arrayContaining([
-        { mountPath: "/app", name: "user-workdir" },
-        { mountPath: "/root/.local/share/opencode", name: "opencode-data" },
-        { mountPath: "/root/.config/opencode", name: "opencode-config" },
-        { mountPath: "/root/.cache/opencode", name: "opencode-cache" },
-      ]),
-     );
-     expect(podSpec.volumes).toEqual(
-       expect.arrayContaining([
-         { hostPath: { path: "/nas/agent-master/users/user-a", type: "DirectoryOrCreate" }, name: "user-workdir" },
-         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/data", type: "DirectoryOrCreate" }, name: "opencode-data" },
-         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/config", type: "DirectoryOrCreate" }, name: "opencode-config" },
-         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/cache", type: "DirectoryOrCreate" }, name: "opencode-cache" },
-       ]),
-     );
+    expect(initContainer.volumeMounts).toEqual([
+      { mountPath: "/app", name: "user-storage", subPath: "agent-master/users/user-a/runtime" },
+      { mountPath: "/root", name: "user-storage", subPath: "agent-master/users/user-a/global" },
+    ]);
+    expect(runtimeContainer.volumeMounts).toEqual([
+      { mountPath: "/app", name: "user-storage", subPath: "agent-master/users/user-a/runtime" },
+      { mountPath: "/root", name: "user-storage", subPath: "agent-master/users/user-a/global" },
+    ]);
+    expect(podSpec.volumes).toEqual([
+      { name: "user-storage", persistentVolumeClaim: { claimName: "agent-runtime-nas" } },
+    ]);
+    expect(JSON.stringify(podSpec.volumes)).not.toContain("hostPath");
      expect(podSpec.terminationGracePeriodSeconds).toBe(60);
      expect(runtimeContainer.lifecycle.preStop.exec.command).toEqual(["/bin/sh", "-c", "sleep 5"]);
     expect(JSON.stringify(deployment)).not.toContain("/nas/agent-master/users/user-a/.runtime/instances");
@@ -302,6 +305,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
 init:
   templatesRoot: ./test/fixtures/templates
 kubernetes:
@@ -343,6 +348,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
 init:
   templatesRoot: ./test/fixtures/templates
 kubernetes:
@@ -366,6 +373,18 @@ kubernetes:
     });
   });
 });
+
+function createKubernetesAdapter(
+  http: RecordingKubernetesHttpClient,
+  options: { maxRuntimePerNamespace?: number } = {},
+): KubernetesRestWorkloadAdapter {
+  return new KubernetesRestWorkloadAdapter({
+    http,
+    workspacePvcClaimName: "agent-runtime-nas",
+    workspacePvcSubPathRoot: "agent-master/users",
+    ...options,
+  });
+}
 
 class RecordingRedisClient implements RedisKeyValueClient {
   selectedDb: number | null = null;

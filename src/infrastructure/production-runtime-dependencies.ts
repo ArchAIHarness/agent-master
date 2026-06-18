@@ -60,6 +60,8 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     websocket: new RuntimeServiceWebSocketProxy({ namespace: config.kubernetes.namespace }),
     workload: new KubernetesRestWorkloadAdapter({
       http: kubernetesHttp,
+      workspacePvcClaimName: config.runtime.workspacePvcClaimName,
+      workspacePvcSubPathRoot: config.runtime.workspacePvcSubPathRoot,
       ...(maxRuntimePerNamespace === undefined ? {} : { maxRuntimePerNamespace }),
     }),
     workdirRoot: config.runtime.workdir,

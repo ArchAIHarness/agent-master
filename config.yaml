@@ -25,6 +25,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
 
 init:
   # Root directory where default initialization templates are stored.
