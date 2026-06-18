@@ -27,6 +27,9 @@ runtime:
   # OpenCode service port.
   port: 4096
   workdir: /nas/agent-master/users
+  # Runtime Deployment storage must use PVC + subPath. hostPath is forbidden.
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
   # OpenSumi agent-webui HTTP port. Leave empty on headless variants.
   agentWebuiPort: 3000
   agentWebuiPathPrefix: /webui

@@ -63,6 +63,8 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     workload: new KubernetesRestWorkloadAdapter({
       http: kubernetesHttp,
       ...(maxRuntimePerNamespace === undefined ? {} : { maxRuntimePerNamespace }),
+      workspacePvcClaimName: config.runtime.workspacePvcClaimName,
+      workspacePvcSubPathRoot: config.runtime.workspacePvcSubPathRoot,
     }),
     workdirRoot: config.runtime.workdir,
   };

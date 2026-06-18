@@ -46,6 +46,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
   agentWebuiPort: 3000
   agentWebuiPathPrefix: /webui
 init:
@@ -74,6 +76,8 @@ kubernetes:
       agentWebuiPort: 3000,
       image: "archai/agent-webui:m1",
       port: 4096,
+      workspacePvcClaimName: "agent-runtime-nas",
+      workspacePvcSubPathRoot: "agent-master/users",
     });
   });
 });
@@ -172,7 +176,11 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("creates deployment and service manifests through Kubernetes REST API", async () => {
     const http = new RecordingKubernetesHttpClient();
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = new KubernetesRestWorkloadAdapter({
+      http,
+      workspacePvcClaimName: "agent-runtime-nas",
+      workspacePvcSubPathRoot: "agent-master/users",
+    });
 
     await adapter.createDeployment({ image: "agent-runtime:local", runtime });
     await adapter.createService({ image: "agent-runtime:local", runtime });
@@ -199,28 +207,29 @@ describe("KubernetesRestWorkloadAdapter", () => {
     expect(http.requests[3]?.contentType).toBe("application/strategic-merge-patch+json");
     expect(initContainer).toMatchObject({ name: "prepare-user-workdir" });
     expect(initCommand).toContain("mkdir -p /app/.opencode");
-    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/data");
-    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/config");
-    expect(initCommand).toContain("mkdir -p /app/.runtime/opencode/cache");
+    expect(initCommand).toContain("mkdir -p /root/.config/opencode");
+    expect(initCommand).toContain("mkdir -p /root/.local/share/opencode");
+    expect(initCommand).toContain("mkdir -p /root/.cache/opencode");
+    expect(initCommand).not.toContain("/app/.runtime/opencode");
     expect(runtimeContainer.command).toEqual(["/bin/sh", "-c"]);
     expect(runtimeContainer.args[0]).toContain("opencode web --port 4096 --hostname 0.0.0.0");
     expect(runtimeContainer.args[0]).toContain("quarantine");
+    expect(initContainer.volumeMounts).toEqual(
+      expect.arrayContaining([
+        { mountPath: "/app", name: "user-storage", subPath: "agent-master/users/user-a/runtime" },
+        { mountPath: "/root", name: "user-storage", subPath: "agent-master/users/user-a/global" },
+      ]),
+    );
     expect(runtimeContainer.volumeMounts).toEqual(
       expect.arrayContaining([
-        { mountPath: "/app", name: "user-workdir" },
-        { mountPath: "/root/.local/share/opencode", name: "opencode-data" },
-        { mountPath: "/root/.config/opencode", name: "opencode-config" },
-        { mountPath: "/root/.cache/opencode", name: "opencode-cache" },
+        { mountPath: "/app", name: "user-storage", subPath: "agent-master/users/user-a/runtime" },
+        { mountPath: "/root", name: "user-storage", subPath: "agent-master/users/user-a/global" },
       ]),
-     );
-     expect(podSpec.volumes).toEqual(
-       expect.arrayContaining([
-         { hostPath: { path: "/nas/agent-master/users/user-a", type: "DirectoryOrCreate" }, name: "user-workdir" },
-         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/data", type: "DirectoryOrCreate" }, name: "opencode-data" },
-         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/config", type: "DirectoryOrCreate" }, name: "opencode-config" },
-         { hostPath: { path: "/nas/agent-master/users/user-a/.runtime/opencode/cache", type: "DirectoryOrCreate" }, name: "opencode-cache" },
-       ]),
-     );
+    );
+    expect(podSpec.volumes).toEqual([
+      { name: "user-storage", persistentVolumeClaim: { claimName: "agent-runtime-nas" } },
+    ]);
+    expect(JSON.stringify(podSpec.volumes)).not.toContain("hostPath");
      expect(podSpec.terminationGracePeriodSeconds).toBe(60);
      expect(runtimeContainer.lifecycle.preStop.exec.command).toEqual(["/bin/sh", "-c", "sleep 5"]);
     expect(JSON.stringify(deployment)).not.toContain("/nas/agent-master/users/user-a/.runtime/instances");
@@ -232,7 +241,11 @@ describe("KubernetesRestWorkloadAdapter", () => {
 
   test("exposes agent-webui HTTP port when configured", async () => {
     const http = new RecordingKubernetesHttpClient();
-    const adapter = new KubernetesRestWorkloadAdapter({ http });
+    const adapter = new KubernetesRestWorkloadAdapter({
+      http,
+      workspacePvcClaimName: "agent-runtime-nas",
+      workspacePvcSubPathRoot: "agent-master/users",
+    });
 
     await adapter.createDeployment({ agentWebuiPort: 3000, image: "archai/agent-webui:m1", runtime });
     await adapter.createService({ agentWebuiPort: 3000, image: "archai/agent-webui:m1", runtime });
@@ -337,6 +350,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
 init:
   templatesRoot: ./test/fixtures/templates
 kubernetes:
@@ -378,6 +393,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
   agentWebuiPort: 3000
   agentWebuiPathPrefix: /webui
 init:
@@ -419,6 +436,8 @@ runtime:
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcSubPathRoot: agent-master/users
 init:
   templatesRoot: ./test/fixtures/templates
 kubernetes:
