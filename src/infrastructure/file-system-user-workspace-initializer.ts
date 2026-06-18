@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { UserWorkspaceInitializer } from "../ports/user-workspace-initializer";
 
@@ -14,12 +13,7 @@ export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitiali
     //   - {workspaceRoot}/global/.config/opencode     → /root/.config/opencode (opencode global config)
     //   - {workspaceRoot}/global/.local/share/opencode → /root/.local/share/opencode (opencode global data/auth.json)
     //   - {workspaceRoot}/global/.cache/opencode     → /root/.cache/opencode (opencode cache/providers/plugins)
-    await this.ensureDir(workspaceRoot);
-    await this.ensureDir(`${workspaceRoot}/runtime`);
-    await this.ensureDir(`${workspaceRoot}/runtime/.opencode`);
-    await this.ensureDir(`${workspaceRoot}/global/.config/opencode`);
-    await this.ensureDir(`${workspaceRoot}/global/.local/share/opencode`);
-    await this.ensureDir(`${workspaceRoot}/global/.cache/opencode`);
+    await this.ensureDirectories(workspaceRoot);
 
     // 2. Copy default templates only if files do NOT exist (atomic, never overwrite user files)
     // - {templatesRoot}/AGENTS.md → {workspaceRoot}/runtime/AGENTS.md
@@ -28,11 +22,17 @@ export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitiali
     await this.copyIfNotExists(`${templatesRoot}/.opencode/opencode.json`, `${workspaceRoot}/runtime/.opencode/opencode.json`);
   }
 
+  async ensureDirectories(workspaceRoot: string): Promise<void> {
+    await this.ensureDir(workspaceRoot);
+    await this.ensureDir(`${workspaceRoot}/runtime`);
+    await this.ensureDir(`${workspaceRoot}/runtime/.opencode`);
+    await this.ensureDir(`${workspaceRoot}/global/.config/opencode`);
+    await this.ensureDir(`${workspaceRoot}/global/.local/share/opencode`);
+    await this.ensureDir(`${workspaceRoot}/global/.cache/opencode`);
+  }
+
   private async ensureDir(dir: string): Promise<void> {
     try {
-      if (existsSync(dir)) {
-        return;
-      }
       await mkdir(dir, { recursive: true });
     } catch (error) {
       throw new Error(`Failed to create directory ${dir}: ${error instanceof Error ? error.message : String(error)}`);
@@ -40,21 +40,28 @@ export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitiali
   }
 
   private async copyIfNotExists(srcPath: string, destPath: string): Promise<void> {
+    let content: Buffer;
     try {
-      if (existsSync(destPath)) {
-        // File already exists (user modified), skip to avoid overwriting
-        return;
-      }
-      if (!existsSync(srcPath)) {
-        // Template file not exist, skip (optional template)
+      content = await readFile(srcPath);
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") {
         console.warn(`Template file ${srcPath} not found, skipping initialization`);
         return;
       }
-      // Read template and write atomically
-      const content = await readFile(srcPath);
-      await writeFile(destPath, content);
+      throw new Error(`Failed to read template ${srcPath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    try {
+      await writeFile(destPath, content, { flag: "wx" });
     } catch (error) {
+      if (isNodeError(error) && error.code === "EEXIST") {
+        return;
+      }
       throw new Error(`Failed to copy template from ${srcPath} to ${destPath}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }

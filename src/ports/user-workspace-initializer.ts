@@ -12,4 +12,9 @@ export interface UserWorkspaceInitializer {
    *   - {templatesRoot}/opencode.json → {workspaceRoot}/.opencode/opencode.json
    */
   initialize(workspaceRoot: string, templatesRoot: string): Promise<void>;
+
+  /**
+   * Ensure restart-time directory tree exists without writing or restoring any template file.
+   */
+  ensureDirectories(workspaceRoot: string): Promise<void>;
 }

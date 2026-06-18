@@ -128,6 +128,7 @@ export class RuntimeCommandService {
     runtime.markRestarting(input.reason);
     await this.publish(runtime);
 
+    await this.dependencies.userWorkspaceInitializer.ensureDirectories(runtime.snapshot().workspaceRootPath);
     await this.dependencies.workload.restartDeployment(runtime.snapshot());
     runtime.markPodReady();
     await this.publish(runtime);

@@ -2,7 +2,6 @@ export const runtimeStatuses = [
   "pending",
   "preparing",
   "running",
-  "idle",
   "terminating",
   "terminated",
   "failed",
