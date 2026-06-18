@@ -18,6 +18,8 @@ const productionConfigSchema = z.object({
     ttl: z.number().int().positive(),
     port: z.number().int().min(1).max(65_535),
     workdir: z.string().min(1),
+    agentWebuiPort: z.number().int().min(1).max(65_535).optional(),
+    agentWebuiPathPrefix: z.string().min(1).default("/webui"),
   }),
   init: z.object({
     templatesRoot: z.string().min(1),

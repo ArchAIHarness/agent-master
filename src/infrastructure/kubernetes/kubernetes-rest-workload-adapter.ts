@@ -94,7 +94,7 @@ export class KubernetesRestWorkloadAdapter implements RuntimeWorkloadPort {
 
   async createService(spec: RuntimeWorkloadSpec): Promise<void> {
     await this.options.http.request({
-      body: buildServiceManifest(spec.runtime),
+      body: buildServiceManifest(spec),
       method: "POST",
       path: `/api/v1/namespaces/${spec.runtime.namespace}/services`,
     });
@@ -413,7 +413,8 @@ function buildDeploymentManifest(spec: RuntimeWorkloadSpec): unknown {
                image: spec.image,
                imagePullPolicy: "IfNotPresent",
                name: "opencode-runtime",
-               ports: [{ containerPort: spec.runtime.targetPort, name: "http" }],
+                ports: buildContainerPorts(spec),
+
               lifecycle: {
                 preStop: {
                   exec: {
@@ -518,7 +519,15 @@ function buildOpenCodeStartupCommand(targetPort: number): string {
   ].join("; ");
 }
 
-function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
+function buildContainerPorts(spec: RuntimeWorkloadSpec): Array<{ containerPort: number; name: string }> {
+  return [
+    { containerPort: spec.runtime.targetPort, name: "opencode-http" },
+    ...(spec.agentWebuiPort === undefined ? [] : [{ containerPort: spec.agentWebuiPort, name: "agent-webui-http" }]),
+  ];
+}
+
+function buildServiceManifest(spec: RuntimeWorkloadSpec): unknown {
+  const runtime = spec.runtime;
   return {
     apiVersion: "v1",
     kind: "Service",
@@ -530,10 +539,19 @@ function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
     spec: {
       ports: [
         {
-          name: "http",
+          name: "opencode-http",
           port: runtime.servicePort,
           targetPort: runtime.targetPort,
         },
+        ...(spec.agentWebuiPort === undefined
+          ? []
+          : [
+              {
+                name: "agent-webui-http",
+                port: spec.agentWebuiPort,
+                targetPort: spec.agentWebuiPort,
+              },
+            ]),
       ],
       selector: runtime.podSelector,
       type: "ClusterIP",

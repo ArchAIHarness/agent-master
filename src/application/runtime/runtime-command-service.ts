@@ -14,6 +14,8 @@ export interface RuntimeCommandServiceDependencies {
   readonly namespace: string;
   readonly runtimeImage: string;
   readonly runtimePort: number;
+  readonly agentWebuiPort?: number;
+  readonly agentWebuiPathPrefix?: string;
   readonly store: RuntimeStore;
   readonly templatesRoot: string;
   readonly ttlSeconds: number;
@@ -188,6 +190,7 @@ export class RuntimeCommandService {
 
   private buildWorkloadSpec(runtime: RuntimeSnapshot): RuntimeWorkloadSpec {
     return {
+      ...(this.dependencies.agentWebuiPort === undefined ? {} : { agentWebuiPort: this.dependencies.agentWebuiPort }),
       image: this.dependencies.runtimeImage,
       runtime,
     };

@@ -53,6 +53,8 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     proxy: new RuntimeServiceFetchProxy({ namespace: config.kubernetes.namespace }),
     runtimeImage: config.runtime.image,
     runtimePort: config.runtime.port,
+    ...(config.runtime.agentWebuiPort === undefined ? {} : { agentWebuiPort: config.runtime.agentWebuiPort }),
+    agentWebuiPathPrefix: config.runtime.agentWebuiPathPrefix,
     store,
     templatesRoot: config.init.templatesRoot,
     ttlSeconds: config.runtime.ttl,

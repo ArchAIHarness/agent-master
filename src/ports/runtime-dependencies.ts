@@ -14,6 +14,8 @@ export interface RuntimeDependenciesOptions {
   readonly proxy: RuntimeAgentProxyPort;
   readonly runtimeImage: string;
   readonly runtimePort: number;
+  readonly agentWebuiPort?: number;
+  readonly agentWebuiPathPrefix?: string;
   readonly store: RuntimeStore;
   readonly templatesRoot: string;
   readonly ttlSeconds: number;

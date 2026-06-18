@@ -42,10 +42,12 @@ redis:
   key: agent-runtime:user
   password: ""
 runtime:
-  image: ghcr.io/archaiharness/agent-runtime:latest
+  image: archai/agent-webui:m1
   ttl: 3600
   port: 4096
   workdir: /nas/agent-master/users
+  agentWebuiPort: 3000
+  agentWebuiPathPrefix: /webui
 init:
   templatesRoot: ./test/fixtures/templates
 kubernetes:
@@ -66,6 +68,12 @@ kubernetes:
       key: "agent-runtime:user",
       password: "",
       port: 6379,
+    });
+    expect(config.runtime).toMatchObject({
+      agentWebuiPathPrefix: "/webui",
+      agentWebuiPort: 3000,
+      image: "archai/agent-webui:m1",
+      port: 4096,
     });
   });
 });
@@ -221,6 +229,31 @@ describe("KubernetesRestWorkloadAdapter", () => {
       requests: { cpu: "100m", memory: "512Mi" },
     });
   });
+
+  test("exposes agent-webui HTTP port when configured", async () => {
+    const http = new RecordingKubernetesHttpClient();
+    const adapter = new KubernetesRestWorkloadAdapter({ http });
+
+    await adapter.createDeployment({ agentWebuiPort: 3000, image: "archai/agent-webui:m1", runtime });
+    await adapter.createService({ agentWebuiPort: 3000, image: "archai/agent-webui:m1", runtime });
+
+    const deployment = http.requests[0]?.body as Record<string, any>;
+    const runtimeContainer = deployment.spec.template.spec.containers[0];
+    const service = http.requests[1]?.body as Record<string, any>;
+
+    expect(runtimeContainer.ports).toEqual(
+      expect.arrayContaining([
+        { containerPort: 4096, name: "opencode-http" },
+        { containerPort: 3000, name: "agent-webui-http" },
+      ]),
+    );
+    expect(service.spec.ports).toEqual(
+      expect.arrayContaining([
+        { name: "opencode-http", port: 4096, targetPort: 4096 },
+        { name: "agent-webui-http", port: 3000, targetPort: 3000 },
+      ]),
+    );
+  });
 });
 
 describe("RuntimeServiceFetchProxy", () => {
@@ -323,6 +356,47 @@ kubernetes:
     expect(await dependencies.workload.checkCapacity({ cluster: "default", namespace: "agent-runtime" })).toMatchObject({
       allowed: true,
     });
+  });
+
+  test("passes configured agent-webui settings into production dependencies", async () => {
+    const dependencies = buildProductionRuntimeDependencies({
+      config: parseProductionConfig(`
+server:
+  port: 3000
+  host: 0.0.0.0
+  log: info
+redis:
+  host: redis
+  port: 6379
+  db: 0
+  key: agent-runtime:user
+  password: ""
+runtime:
+  image: archai/agent-webui:m1
+  ttl: 3600
+  port: 4096
+  workdir: /nas/agent-master/users
+  agentWebuiPort: 3000
+  agentWebuiPathPrefix: /webui
+init:
+  templatesRoot: ./test/fixtures/templates
+kubernetes:
+  cluster: default
+  namespace: agent-runtime
+  clusters:
+    - name: default
+      namespace: agent-runtime
+      auth: inCluster
+      scheduling:
+        enabled: true
+        maxRuntime: 100
+`),
+      kubernetesHttpClient: new RecordingKubernetesHttpClient(),
+      redisClient: new RecordingRedisClient(),
+    });
+
+    expect(dependencies.agentWebuiPort).toBe(3000);
+    expect(dependencies.agentWebuiPathPrefix).toBe("/webui");
   });
 
   test("passes configured maxRuntime into Kubernetes workload adapter", async () => {

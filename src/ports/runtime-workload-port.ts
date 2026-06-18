@@ -3,6 +3,7 @@ import type { RuntimeSnapshot } from "../domain/runtime/runtime";
 export interface RuntimeWorkloadSpec {
   readonly runtime: RuntimeSnapshot;
   readonly image: string;
+  readonly agentWebuiPort?: number;
 }
 
 export interface RuntimeCapacityCheckInput {

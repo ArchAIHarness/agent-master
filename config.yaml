@@ -20,11 +20,16 @@ redis:
   password: ""
 
 runtime:
-  # Replace with the local agent-image when running in local Kubernetes.
-  image: agent-image:latest
+  # Headless default: agent-image:latest.
+  # OpenSumi variant: use archai/agent-webui:m1 on variants/opensumi-agent-webui.
+  image: archai/agent-webui:m1
   ttl: 3600
+  # OpenCode service port.
   port: 4096
   workdir: /nas/agent-master/users
+  # OpenSumi agent-webui HTTP port. Leave empty on headless variants.
+  agentWebuiPort: 3000
+  agentWebuiPathPrefix: /webui
 
 init:
   # Root directory where default initialization templates are stored.
