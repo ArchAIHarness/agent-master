@@ -53,13 +53,6 @@ init:
 kubernetes:
   cluster: default
   namespace: agent-runtime
-  clusters:
-    - name: default
-      namespace: agent-runtime
-      auth: inCluster
-      scheduling:
-        enabled: true
-        maxRuntime: 100
 `);
 
     expect(config.redis).toMatchObject({
@@ -96,107 +89,6 @@ describe("RedisRuntimeStore", () => {
 });
 
 describe("KubernetesRestWorkloadAdapter", () => {
-  test("checks namespace, node readiness, quotas, limits, pod distribution and warnings before scheduling", async () => {
-    const http = new RecordingKubernetesHttpClient();
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity.allowed).toBe(true);
-    expect(http.requests.map((request) => `${request.method} ${request.path}`)).toEqual([
-      "GET /api/v1/namespaces/agent-runtime",
-      "GET /api/v1/nodes",
-      "GET /api/v1/namespaces/agent-runtime/resourcequotas",
-      "GET /api/v1/namespaces/agent-runtime/limitranges",
-      "GET /api/v1/namespaces/agent-runtime/pods?labelSelector=app%3Dopencode-runtime",
-      "GET /apis/apps/v1/namespaces/agent-runtime/deployments?labelSelector=app%3Dopencode-runtime",
-      "GET /api/v1/namespaces/agent-runtime/events?fieldSelector=type%3DWarning",
-    ]);
-  });
-
-  test("rejects capacity when node has memory pressure", async () => {
-    const http = new RecordingKubernetesHttpClient({ nodeMemoryPressure: true });
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity).toMatchObject({ allowed: false, reason: "cluster default has no schedulable node with enough resources" });
-  });
-
-  test("rejects capacity when namespace quota has no remaining service capacity", async () => {
-    const http = new RecordingKubernetesHttpClient({ quotaServicesHard: "1", quotaServicesUsed: "1" });
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity).toMatchObject({ allowed: false, reason: "namespace agent-runtime quota services is exhausted" });
-  });
-
-  test("rejects capacity when limit range maximum is below runtime memory request", async () => {
-    const http = new RecordingKubernetesHttpClient({ limitMaxMemory: "128Mi" });
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity).toMatchObject({ allowed: false, reason: "namespace agent-runtime LimitRange max memory is below runtime request" });
-  });
-
-  test("rejects capacity when namespace runtime distribution reaches maxRuntime", async () => {
-    const http = new RecordingKubernetesHttpClient({ runtimeDeploymentCount: 2 });
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      maxRuntimePerNamespace: 2,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity).toMatchObject({ allowed: false, reason: "namespace agent-runtime reached max runtime count 2" });
-  });
-
-  test("rejects capacity when runtime deployment has unavailable condition", async () => {
-    const http = new RecordingKubernetesHttpClient({ deploymentUnavailable: true });
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity).toMatchObject({ allowed: false, reason: "namespace agent-runtime has unhealthy runtime deployments" });
-  });
-
-  test("rejects capacity when namespace quota has no remaining runtime pod capacity", async () => {
-    const http = new RecordingKubernetesHttpClient({ quotaPodsHard: "1", quotaPodsUsed: "1" });
-    const adapter = new KubernetesRestWorkloadAdapter({
-      http,
-      workspacePvcClaimName: "agent-runtime-nas",
-      workspacePvcSubPathRoot: "agent-master/users",
-    });
-
-    const capacity = await adapter.checkCapacity({ cluster: "default", namespace: "agent-runtime" });
-
-    expect(capacity).toMatchObject({ allowed: false, reason: "namespace agent-runtime quota pods is exhausted" });
-  });
-
   test("creates deployment and service manifests through Kubernetes REST API", async () => {
     const http = new RecordingKubernetesHttpClient();
     const adapter = new KubernetesRestWorkloadAdapter({
@@ -342,65 +234,14 @@ init:
 kubernetes:
   cluster: default
   namespace: agent-runtime
-  clusters:
-    - name: default
-      namespace: agent-runtime
-      auth: inCluster
-      scheduling:
-        enabled: true
-        maxRuntime: 100
 `),
       kubernetesHttpClient: new RecordingKubernetesHttpClient(),
       redisClient: new RecordingRedisClient(),
     });
 
     expect(dependencies.runtimePort).toBe(4096);
-    expect(await dependencies.workload.checkCapacity({ cluster: "default", namespace: "agent-runtime" })).toMatchObject({
-      allowed: true,
-    });
-  });
-
-  test("passes configured maxRuntime into Kubernetes workload adapter", async () => {
-    const dependencies = buildProductionRuntimeDependencies({
-      config: parseProductionConfig(`
-server:
-  port: 3000
-  host: 0.0.0.0
-  log: info
-redis:
-  host: redis
-  port: 6379
-  db: 0
-  key: agent-runtime:user
-  password: ""
-runtime:
-  image: ghcr.io/archaiharness/agent-runtime:latest
-  ttl: 3600
-  port: 4096
-  workdir: /nas/agent-master/users
-  workspacePvcClaimName: agent-runtime-nas
-  workspacePvcSubPathRoot: agent-master/users
-init:
-  templatesRoot: ./test/fixtures/templates
-kubernetes:
-  cluster: default
-  namespace: agent-runtime
-  clusters:
-    - name: default
-      namespace: agent-runtime
-      auth: inCluster
-      scheduling:
-        enabled: true
-        maxRuntime: 1
-`),
-      kubernetesHttpClient: new RecordingKubernetesHttpClient({ runtimeDeploymentCount: 1 }),
-      redisClient: new RecordingRedisClient(),
-    });
-
-    await expect(dependencies.workload.checkCapacity({ cluster: "default", namespace: "agent-runtime" })).resolves.toMatchObject({
-      allowed: false,
-      reason: "namespace agent-runtime reached max runtime count 1",
-    });
+    expect(dependencies.namespace).toBe("agent-runtime");
+    expect(dependencies.cluster).toBe("default");
   });
 });
 

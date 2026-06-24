@@ -42,7 +42,6 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
       apiServer: resolveKubernetesApiServer(),
       ...readServiceAccountCredentials(),
     });
-  const maxRuntimePerNamespace = resolveMaxRuntimePerNamespace(config);
   const userWorkspaceInitializer = new FileSystemUserWorkspaceInitializer();
 
   return {
@@ -62,7 +61,6 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
       http: kubernetesHttp,
       workspacePvcClaimName: config.runtime.workspacePvcClaimName,
       workspacePvcSubPathRoot: config.runtime.workspacePvcSubPathRoot,
-      ...(maxRuntimePerNamespace === undefined ? {} : { maxRuntimePerNamespace }),
     }),
     workdirRoot: config.runtime.workdir,
   };
@@ -71,13 +69,6 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
 export async function buildProductionRuntimeDependenciesFromFile(path = "config.yaml"): Promise<RuntimeDependenciesOptions> {
   const config = await loadProductionConfig(path);
   return buildProductionRuntimeDependencies({ config });
-}
-
-function resolveMaxRuntimePerNamespace(config: ProductionConfig): number | undefined {
-  const matched = config.kubernetes.clusters.find(
-    (cluster) => cluster.name === config.kubernetes.cluster && cluster.namespace === config.kubernetes.namespace,
-  );
-  return matched?.scheduling.enabled ? matched.scheduling.maxRuntime : undefined;
 }
 
 function resolveConfiguredPassword(value: string): string | undefined {

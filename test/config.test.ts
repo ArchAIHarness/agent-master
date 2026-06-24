@@ -10,27 +10,6 @@ describe("loadConfig", () => {
       port: 3000,
       host: "0.0.0.0",
       logLevel: "info",
-      clusters: [],
     });
-  });
-
-  test("loads Kubernetes clusters from JSON environment value", () => {
-    const config = loadConfig({
-      K8S_CLUSTERS: JSON.stringify([
-        {
-          name: "dev",
-          apiServer: "https://kubernetes.default.svc",
-          namespace: "default",
-        },
-      ]),
-    });
-
-    expect(config.clusters).toEqual([
-      {
-        name: "dev",
-        apiServer: "https://kubernetes.default.svc",
-        namespace: "default",
-      },
-    ]);
   });
 });

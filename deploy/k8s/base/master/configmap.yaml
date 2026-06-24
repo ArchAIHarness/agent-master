@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-master-config
+  namespace: agent-master
+data:
+  config.yaml: |
+    server:
+      port: 3000
+      host: 0.0.0.0
+      log: info
+
+    redis:
+      host: redis.agent-runtime.svc.cluster.local
+      port: 6379
+      db: 0
+      key: agent-runtime:user
+      password: ""
+
+    runtime:
+      image: agent-image:latest
+      ttl: 3600
+      port: 4096
+      workdir: /nas/agent-master/users
+      workspacePvcClaimName: agent-runtime-nas
+      workspacePvcSubPathRoot: agent-master/users
+
+    init:
+      templatesRoot: ./resources/templates
+
+    kubernetes:
+      cluster: default
+      namespace: agent-runtime

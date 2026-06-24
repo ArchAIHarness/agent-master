@@ -1,0 +1,26 @@
+# Docker-hosted NFS server for local docker-desktop Kubernetes.
+#
+# Why docker (not in-cluster): on docker-desktop the kubelet performs NFS mounts
+# from the host (LinuxKit VM) network namespace and cannot reach a Pod ClusterIP,
+# so an in-cluster NFS Service times out. Running the NFS server as a docker
+# container on the host network binds 2049 directly on the VM, which the kubelet
+# can reach. The k8s PVs point at the node IP.
+#
+# Backing store is a named docker volume shared by master init and all Agents.
+services:
+  nfs-server:
+    image: erichough/nfs-server:2.2.1
+    container_name: agent-master-nfs
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      NFS_EXPORT_0: "/nfsshare *(rw,no_subtree_check,no_root_squash,fsid=0)"
+      NFS_VERSION: "4.2"
+      NFS_DISABLE_VERSION_3: "1"
+    volumes:
+      - agent-master-nfs:/nfsshare
+      - /lib/modules:/lib/modules:ro
+
+volumes:
+  agent-master-nfs:

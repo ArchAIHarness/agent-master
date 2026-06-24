@@ -1,0 +1,39 @@
+# NFS-backed PV/PVC for runtime Agent workloads.
+# Agent Deployments mount this single PVC and use two subPaths per user:
+#   {subPathRoot}/{userId}/runtime -> /app
+#   {subPathRoot}/{userId}/global  -> ~
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: agent-runtime-nas-pv
+  labels:
+    app.kubernetes.io/part-of: agent-master
+    agent-master/role: runtime
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.2
+    - hard
+    - sec=sys
+  nfs:
+    server: 127.0.0.1
+    path: /
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-runtime-nas
+  namespace: agent-runtime
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: agent-runtime-nas-pv
+  resources:
+    requests:
+      storage: 20Gi

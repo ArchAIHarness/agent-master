@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-master
+  namespace: agent-master
+  labels:
+    app: agent-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-master
+  template:
+    metadata:
+      labels:
+        app: agent-master
+    spec:
+      serviceAccountName: agent-master
+      containers:
+        - name: agent-master
+          image: agent-master:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOST
+              value: 0.0.0.0
+            - name: LOG_LEVEL
+              value: info
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+            - name: nas
+              mountPath: /nas
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: agent-master-config
+        - name: nas
+          persistentVolumeClaim:
+            claimName: agent-master-nas
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-master
+  namespace: agent-master
+  labels:
+    app: agent-master
+spec:
+  selector:
+    app: agent-master
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

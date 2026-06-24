@@ -27,17 +27,6 @@ const productionConfigSchema = z.object({
   kubernetes: z.object({
     cluster: z.string().min(1),
     namespace: z.string().min(1),
-    clusters: z.array(
-      z.object({
-        name: z.string().min(1),
-        namespace: z.string().min(1),
-        auth: z.string().min(1),
-        scheduling: z.object({
-          enabled: z.boolean(),
-          maxRuntime: z.number().int().positive(),
-        }),
-      }),
-    ),
   }),
 });
 
@@ -58,7 +47,6 @@ function parseYamlSubset(content: string): unknown {
   const lines = content.split(/\r?\n/);
   let section = "";
   let nested = "";
-  let currentCluster: Record<string, unknown> | null = null;
 
   for (const rawLine of lines) {
     const withoutComment = stripComment(rawLine);
@@ -72,39 +60,14 @@ function parseYamlSubset(content: string): unknown {
     if (indent === 0 && line.endsWith(":")) {
       section = line.slice(0, -1);
       nested = "";
-      root[section] = section === "kubernetes" ? { clusters: [] } : {};
+      root[section] = {};
       continue;
     }
 
     if (indent === 2 && line.endsWith(":")) {
       nested = line.slice(0, -1);
       const target = ensureRecord(root, section);
-      target[nested] = nested === "clusters" ? [] : {};
-      continue;
-    }
-
-    if (section === "kubernetes" && nested === "clusters" && indent === 4 && line.startsWith("- ")) {
-      currentCluster = {};
-      const clusters = ensureArray(ensureRecord(root, section), "clusters");
-      clusters.push(currentCluster);
-      assignKeyValue(currentCluster, line.slice(2));
-      continue;
-    }
-
-    if (section === "kubernetes" && nested === "clusters" && currentCluster && indent === 6) {
-      if (line.endsWith(":")) {
-        const key = line.slice(0, -1);
-        currentCluster[key] = {};
-        nested = `clusters.${key}`;
-      } else {
-        assignKeyValue(currentCluster, line);
-      }
-      continue;
-    }
-
-    if (section === "kubernetes" && nested === "clusters.scheduling" && currentCluster && indent === 8) {
-      const scheduling = ensureRecord(currentCluster, "scheduling");
-      assignKeyValue(scheduling, line);
+      target[nested] = {};
       continue;
     }
 
@@ -135,16 +98,6 @@ function ensureRecord(target: Record<string, unknown>, key: string): Record<stri
   const record: Record<string, unknown> = {};
   target[key] = record;
   return record;
-}
-
-function ensureArray(target: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
-  const value = target[key];
-  if (Array.isArray(value)) {
-    return value as Array<Record<string, unknown>>;
-  }
-  const array: Array<Record<string, unknown>> = [];
-  target[key] = array;
-  return array;
 }
 
 function assignKeyValue(target: Record<string, unknown>, line: string): void {

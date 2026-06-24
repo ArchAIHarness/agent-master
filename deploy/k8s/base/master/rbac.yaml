@@ -1,0 +1,39 @@
+# Strict cross-namespace RBAC (namespace-scoped only, no ClusterRole).
+# - ServiceAccount lives in the master namespace.
+# - Role lives in the runtime namespace and grants ONLY what the scheduler needs:
+#   manage Deployments + Services, and read Pods for readiness checks.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-master
+  namespace: agent-master
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agent-master-runtime-manager
+  namespace: agent-runtime
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-master-runtime-manager
+  namespace: agent-runtime
+subjects:
+  - kind: ServiceAccount
+    name: agent-master
+    namespace: agent-master
+roleRef:
+  kind: Role
+  name: agent-master-runtime-manager
+  apiGroup: rbac.authorization.k8s.io

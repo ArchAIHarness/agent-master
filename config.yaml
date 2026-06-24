@@ -37,10 +37,3 @@ init:
 kubernetes:
   cluster: default
   namespace: agent-runtime
-  clusters:
-    - name: default
-      namespace: agent-runtime
-      auth: inCluster
-      scheduling:
-        enabled: true
-        maxRuntime: 100

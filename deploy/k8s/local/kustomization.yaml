@@ -1,0 +1,19 @@
+# Local docker-desktop overlay.
+# Brings up the full self-contained stack: namespaces, strict cross-ns RBAC,
+# NFS PV/PVC for both master and runtime, Redis, and the agent-master control
+# plane. Agent runtime workloads are created dynamically by agent-master at
+# request time (POST /runtime).
+#
+# NFS is NOT run in-cluster: on docker-desktop the kubelet mounts NFS from the
+# host network namespace and cannot reach a Pod ClusterIP. Instead the NFS
+# server runs as a docker container on the host network (see
+# deploy/local/docker-compose.nfs.yml), and these PVs point at
+# host.docker.internal. Start it with deploy/local/build-image.sh + deploy.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+  - nfs-pv-master.yaml
+  - nfs-pv-runtime.yaml
+  - redis.yaml

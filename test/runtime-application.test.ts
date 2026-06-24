@@ -254,10 +254,6 @@ class RecordingUserWorkspaceInitializer implements UserWorkspaceInitializer {
 class ServiceFailingWorkloadAdapter implements RuntimeWorkloadPort {
   readonly deletedDeployments: string[] = [];
 
-  async checkCapacity(): Promise<{ allowed: boolean }> {
-    return { allowed: true };
-  }
-
   async createDeployment(_spec: RuntimeWorkloadSpec): Promise<void> {
     return;
   }

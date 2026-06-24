@@ -20,7 +20,6 @@ function buildRuntimeApp() {
   const userWorkspaceInitializer = new NoopUserWorkspaceInitializer();
   const app = buildApp({
     config: {
-      clusters: [],
       host: "0.0.0.0",
       logLevel: "silent",
       port: 0,

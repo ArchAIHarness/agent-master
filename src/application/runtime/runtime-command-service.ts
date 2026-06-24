@@ -76,14 +76,6 @@ export class RuntimeCommandService {
       runtime.markScheduled();
       await this.publish(runtime);
 
-       const capacity = await this.dependencies.workload.checkCapacity({
-         cluster: this.dependencies.cluster,
-         namespace: this.dependencies.namespace,
-       });
-       if (!capacity.allowed) {
-         throw new Error(capacity.reason ?? "runtime capacity check failed");
-       }
-
        // Initialize user workspace on master side before creating deployment
        // - First creation: copy default templates if files not exist
        // - Restart: only ensure directories exist, never overwrite user files

@@ -1,0 +1,38 @@
+# NFS-backed PV/PVC for the master control plane.
+# Master mounts the NFS share root at /nas and initializes user workdirs under
+# /nas/agent-master/users/{userId}/...
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: agent-master-nas-pv
+  labels:
+    app.kubernetes.io/part-of: agent-master
+    agent-master/role: control-plane
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.2
+    - hard
+    - sec=sys
+  nfs:
+    server: 127.0.0.1
+    path: /
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-master-nas
+  namespace: agent-master
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: agent-master-nas-pv
+  resources:
+    requests:
+      storage: 20Gi
