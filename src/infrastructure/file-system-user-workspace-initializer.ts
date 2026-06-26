@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import type { UserWorkspaceInitializer } from "../ports/user-workspace-initializer";
+import type { UserWorkspaceInitializer } from "../domain/runtime/user-workspace-initializer";
 
 export class FileSystemUserWorkspaceInitializer implements UserWorkspaceInitializer {
   async initialize(workspaceRoot: string, templatesRoot: string): Promise<void> {

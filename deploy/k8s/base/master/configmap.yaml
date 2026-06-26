@@ -20,9 +20,13 @@ data:
     runtime:
       image: build-on-vscode-opencode-image:local
       ttl: 3600
-      port: 8080
+      webui:
+        port: 8080
+        domainTemplate: "http://{runtimeId}.localhost/"
+      agent:
+        port: 4096
       workdir: /nas/agent-master/users
-      workspacePvcClaimName: agent-master-nas
+      workspacePvcClaimName: agent-runtime-nas
       workspacePvcSubPathRoot: agent-master/users
       resources:
         requests:
@@ -38,3 +42,7 @@ data:
     kubernetes:
       cluster: default
       namespace: agent-runtime
+
+    proxy:
+      subdomainPort: 8080
+      agentPathPort: 4096

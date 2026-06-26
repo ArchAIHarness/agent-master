@@ -1,8 +1,8 @@
 import { RuntimeAggregate } from "../../domain/runtime/runtime";
 import { createRuntimeEvent, type RuntimeEvent } from "../../domain/runtime/runtime-events";
-import type { RuntimeClock } from "../../ports/runtime-clock";
-import type { RuntimeEventBus, RuntimeEventListener } from "../../ports/runtime-event-bus";
-import type { RuntimeStore } from "../../ports/runtime-store";
+import type { RuntimeClock } from "../../domain/runtime/runtime-clock";
+import type { RuntimeEventBus, RuntimeEventListener } from "../../domain/runtime/runtime-event-bus";
+import type { RuntimeStore } from "../../domain/runtime/runtime-store";
 
 export interface RuntimeEventStreamServiceDependencies {
   readonly clock: RuntimeClock;

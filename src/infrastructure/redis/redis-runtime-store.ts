@@ -1,5 +1,5 @@
 import type { RuntimeSnapshot } from "../../domain/runtime/runtime";
-import type { RuntimeStore } from "../../ports/runtime-store";
+import type { RuntimeStore } from "../../domain/runtime/runtime-store";
 
 export interface RedisKeyValueClient {
   select(db: number): Promise<void>;

@@ -2,7 +2,7 @@ import type {
   RuntimeAgentWebSocketPort,
   RuntimeWebSocketUpstream,
   RuntimeWebSocketUpstreamRequest,
-} from "../../ports/runtime-agent-websocket-port";
+} from "../../domain/runtime/runtime-agent-websocket-port";
 
 export interface FakeRuntimeAgentWebSocket extends RuntimeWebSocketUpstream {
   readonly request: RuntimeWebSocketUpstreamRequest;

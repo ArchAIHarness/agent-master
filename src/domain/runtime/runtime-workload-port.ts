@@ -1,4 +1,4 @@
-import type { RuntimeSnapshot } from "../domain/runtime/runtime";
+import type { RuntimeSnapshot } from "./runtime";
 
 export interface RuntimeWorkloadSpec {
   readonly runtime: RuntimeSnapshot;

@@ -1,11 +1,11 @@
 import { RuntimeAggregate, type RuntimeSnapshot } from "../../domain/runtime/runtime";
 import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
 import { buildRuntimeWorkspaceRoot } from "../../domain/runtime/runtime-policy";
-import type { RuntimeClock } from "../../ports/runtime-clock";
-import type { RuntimeEventBus } from "../../ports/runtime-event-bus";
-import type { UserWorkspaceInitializer } from "../../ports/user-workspace-initializer";
-import type { RuntimeStore } from "../../ports/runtime-store";
-import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../ports/runtime-workload-port";
+import type { RuntimeClock } from "../../domain/runtime/runtime-clock";
+import type { RuntimeEventBus } from "../../domain/runtime/runtime-event-bus";
+
+import type { RuntimeStore } from "../../domain/runtime/runtime-store";
+import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../domain/runtime/runtime-workload-port";
 
 export interface RuntimeCommandServiceDependencies {
   readonly clock: RuntimeClock;
@@ -18,9 +18,9 @@ export interface RuntimeCommandServiceDependencies {
   readonly store: RuntimeStore;
   readonly templatesRoot: string;
   readonly ttlSeconds: number;
-  readonly userWorkspaceInitializer: UserWorkspaceInitializer;
   readonly workload: RuntimeWorkloadPort;
   readonly workdirRoot: string;
+  readonly webuiDomainTemplate?: string;
 }
 
 export class RuntimeCommandService {
@@ -78,14 +78,8 @@ export class RuntimeCommandService {
       runtime.markScheduled();
       await this.publish(runtime);
 
-       // Initialize user workspace on master side before creating deployment
-       // - First creation: copy default templates if files not exist
-       // - Restart: only ensure directories exist, never overwrite user files
-       await this.dependencies.userWorkspaceInitializer.initialize(
-         runtime.snapshot().workspaceRootPath,
-         this.dependencies.templatesRoot,
-       );
-
+       // 用户工作目录由 runtime pod 的 initContainer 初始化
+       // agent-master 不挂载 NAS，不碰文件系统
        const spec = this.buildWorkloadSpec(runtime.snapshot());
       await this.dependencies.workload.createDeployment(spec);
       deploymentCreated = true;
@@ -122,7 +116,6 @@ export class RuntimeCommandService {
     runtime.markRestarting(input.reason);
     await this.publish(runtime);
 
-    await this.dependencies.userWorkspaceInitializer.ensureDirectories(runtime.snapshot().workspaceRootPath);
     await this.dependencies.workload.restartDeployment(runtime.snapshot());
     runtime.markPodReady();
     await this.publish(runtime);

@@ -1,14 +1,14 @@
 import { RuntimeAggregate, type RuntimeSnapshot } from "../../domain/runtime/runtime";
 import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
-import type { RuntimeClock } from "../../ports/runtime-clock";
+import type { RuntimeClock } from "../../domain/runtime/runtime-clock";
 import type {
   RuntimeAgentWebSocketPort,
   RuntimeWebSocketDownstream,
   RuntimeWebSocketHeaders,
   RuntimeWebSocketQuery,
-} from "../../ports/runtime-agent-websocket-port";
-import type { RuntimeEventBus } from "../../ports/runtime-event-bus";
-import type { RuntimeStore } from "../../ports/runtime-store";
+} from "../../domain/runtime/runtime-agent-websocket-port";
+import type { RuntimeEventBus } from "../../domain/runtime/runtime-event-bus";
+import type { RuntimeStore } from "../../domain/runtime/runtime-store";
 
 export interface RuntimeAgentWebSocketServiceDependencies {
   readonly clock: RuntimeClock;

@@ -10,9 +10,13 @@ export interface RuntimeResponse {
   readonly deploymentName: string;
   readonly serviceName: string;
   readonly leaseExpireAt?: string;
+  readonly webuiUrl: string;
+  readonly agentApiBase: string;
 }
 
-export function toRuntimeResponse(snapshot: RuntimeSnapshot): RuntimeResponse {
+export function toRuntimeResponse(snapshot: RuntimeSnapshot, webuiDomainTemplate = "http://{runtimeId}.localhost/"): RuntimeResponse {
+  const webuiUrl = webuiDomainTemplate.replace("{runtimeId}", snapshot.runtimeId);
+  const agentApiBase = `${webuiDomainTemplate.replace("{runtimeId}", snapshot.runtimeId)}agent/`;
   return {
     cluster: snapshot.cluster,
     deploymentName: snapshot.deploymentName,
@@ -22,5 +26,7 @@ export function toRuntimeResponse(snapshot: RuntimeSnapshot): RuntimeResponse {
     serviceName: snapshot.serviceName,
     status: snapshot.status,
     userId: snapshot.userId,
+    webuiUrl,
+    agentApiBase,
   };
 }

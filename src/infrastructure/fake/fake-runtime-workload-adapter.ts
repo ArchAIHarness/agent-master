@@ -1,5 +1,5 @@
 import type { RuntimeSnapshot } from "../../domain/runtime/runtime";
-import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../ports/runtime-workload-port";
+import type { RuntimeWorkloadPort, RuntimeWorkloadSpec } from "../../domain/runtime/runtime-workload-port";
 
 export class FakeRuntimeWorkloadAdapter implements RuntimeWorkloadPort {
   readonly createdDeployments: RuntimeWorkloadSpec[] = [];

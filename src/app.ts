@@ -1,78 +1,101 @@
-import sensible from "@fastify/sensible";
-import websocket from "@fastify/websocket";
-import Fastify, { type FastifyInstance } from "fastify";
+import express from "express";
+import http from "node:http";
+import type { Request, Response, NextFunction } from "express";
+import type { RuntimeDependenciesOptions } from "./application/runtime/dependencies";
+import type { RuntimeCommandService } from "./application/runtime/runtime-command-service";
+import { HttpProxyService } from "./interfaces/http/proxy/http-proxy-service";
+import { createMasterRoutes } from "./interfaces/http/routes/master-routes";
 
-import { RuntimeAgentProxyService } from "./application/runtime/runtime-agent-proxy-service";
-import { RuntimeAgentWebSocketService } from "./application/runtime/runtime-agent-websocket-service";
-import { RuntimeCommandService } from "./application/runtime/runtime-command-service";
-import { RuntimeEventStreamService } from "./application/runtime/runtime-event-stream-service";
-import { RuntimeQueryService } from "./application/runtime/runtime-query-service";
-import { loadConfig, type SchedulerConfig } from "./config";
-import { registerAgentProxyRoutes } from "./interfaces/http/agent-proxy-routes";
-import { registerAgentWebSocketRoutes } from "./interfaces/http/agent-websocket-routes";
-import { registerRuntimeRoutes } from "./interfaces/http/runtime-routes";
-import { registerWebUiRoutes } from "./interfaces/http/webui-routes";
-import type { RuntimeDependenciesOptions } from "./ports/runtime-dependencies";
+export function buildApp(deps: RuntimeDependenciesOptions & { commandService: RuntimeCommandService }, config: any) {
+  const app = express();
+  const server = http.createServer(app);
 
-export interface BuildAppOptions {
-  config?: SchedulerConfig;
-  runtime?: RuntimeDependenciesOptions;
-}
+  app.use(express.json());
 
-export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const config = options.config ?? loadConfig();
-  const app = Fastify({ logger: { level: config.logLevel } });
+  // 代理服务实例
+  const proxyService = new HttpProxyService(
+    deps.store,
+    config.kubernetes.namespace,
+    config.runtime.webui.port,
+    config.runtime.agent.port,
+  );
 
-  void app.register(sensible);
-  void app.register(websocket);
-
-  app.get("/health", async () => ({
-    service: "agent-master",
-    status: "ok",
-  }));
-
-  if (options.runtime) {
-    registerRuntimeModules(app, options.runtime);
-  }
-
-  return app;
-}
-
-function registerRuntimeModules(app: FastifyInstance, runtimeDependencies: RuntimeDependenciesOptions): void {
-  const commandService = new RuntimeCommandService(runtimeDependencies);
-  const queryService = new RuntimeQueryService({ store: runtimeDependencies.store });
-  const eventStreamService = new RuntimeEventStreamService({
-    clock: runtimeDependencies.clock,
-    eventBus: runtimeDependencies.eventBus,
-    store: runtimeDependencies.store,
-    ttlSeconds: runtimeDependencies.ttlSeconds,
-  });
-  const proxyService = new RuntimeAgentProxyService({
-    clock: runtimeDependencies.clock,
-    eventBus: runtimeDependencies.eventBus,
-    proxy: runtimeDependencies.proxy,
-    store: runtimeDependencies.store,
-    ttlSeconds: runtimeDependencies.ttlSeconds,
+  /**
+   * Health check - 必须放在最前面，避免被子域名中间件拦截
+   */
+  app.get("/health", (req: Request, res: Response) => {
+    res.json({ service: "agent-master", status: "ok" });
   });
 
-  void app.register(registerRuntimeRoutes, {
-    commandService,
-    eventStreamService,
-    queryService,
+  /**
+   * Layer 1: *.hostname → WebUI 全量代理
+   * 必须放在 /agent 和 /runtime 前面
+   */
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
+    const host = req.headers.host;
+    if (!host) {
+      next();
+      return;
+    }
+
+    const parts = host.split(".");
+    const subdomain = parts.length >= 2 ? parts.at(0) : undefined;
+    if (subdomain && !subdomain.includes(":")) {
+      // 有子域名（不是端口号）就尝试查 runtime，查到是 running 就代理，否则继续往下走
+      const handled = await proxyService.proxyWebui(req, res, subdomain);
+      if (handled) return;
+    }
+
+    next();
   });
-  void app.register(registerAgentProxyRoutes, { proxyService });
 
-  if (runtimeDependencies.websocket) {
-    const websocketService = new RuntimeAgentWebSocketService({
-      clock: runtimeDependencies.clock,
-      eventBus: runtimeDependencies.eventBus,
-      store: runtimeDependencies.store,
-      ttlSeconds: runtimeDependencies.ttlSeconds,
-      websocket: runtimeDependencies.websocket,
-    });
-    void app.register(registerAgentWebSocketRoutes, { websocketService });
+  /**
+   * Layer 2: hostname/agent/* → Agent API 代理
+   */
+  app.use("/agent", async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.headers["x-user-id"] as string;
+    if (!userId) {
+      res.status(400).json({ code: "MISSING_USER_ID", message: "x-user-id is required" });
+      return;
+    }
 
-    // 注册 VSCode Web UI 入口（独立于 /agent/* API 代理）
-    void app.register(registerWebUiRoutes, { proxyService, websocketService });
-  }
+    await proxyService.proxyAgent(req, res, userId);
+  });
+
+  /**
+   * Layer 3: hostname/runtime → Master 管理 API
+   */
+  app.use("/", createMasterRoutes(deps.commandService, deps.store));
+
+  /**
+   * WebSocket upgrade 处理
+   */
+  server.on("upgrade", async (req, socket, head) => {
+    const host = req.headers.host;
+    const url = req.url ?? "/";
+
+    // 1. *.hostname WebSocket → WebUI 代理
+    if (host) {
+    const parts = host.split(".");
+    const subdomain = parts.length >= 2 ? parts.at(0) : undefined;
+    if (subdomain) {
+      // 有子域名就尝试查 runtime，查到是 running 就代理，否则关闭连接
+      await proxyService.proxyWebuiWs(req, socket, head as Buffer, subdomain);
+      return;
+    }
+    }
+
+    // 2. /agent/* WebSocket → Agent API 代理
+    if (url.startsWith("/agent/")) {
+      const userId = req.headers["x-user-id"] as string;
+      if (!userId) {
+        try { socket.destroy(); } catch {}
+        return;
+      }
+      await proxyService.proxyAgentWs(req, socket, head as Buffer, userId);
+      return;
+    }
+  });
+
+  return { app, server };
 }

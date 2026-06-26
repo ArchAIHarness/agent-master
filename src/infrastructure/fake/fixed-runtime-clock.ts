@@ -1,4 +1,4 @@
-import type { RuntimeClock } from "../../ports/runtime-clock";
+import type { RuntimeClock } from "../../domain/runtime/runtime-clock";
 
 export class FixedRuntimeClock implements RuntimeClock {
   constructor(private readonly current: Date) {}

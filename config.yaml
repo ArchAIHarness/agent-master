@@ -25,6 +25,7 @@ runtime:
   ttl: 3600
   webui:
     port: 8080
+    domain: localhost
   agent:
     port: 4096
   workdir: /nas/agent-master/users
@@ -43,12 +44,6 @@ init:
   # - AGENTS.md → user workdir AGENTS.md (created if not exists)
   # - opencode.json → user workdir .opencode/opencode.json (created if not exists)
   templatesRoot: ./resources/templates
-
-proxy:
-  # 子域名 → runtime.webuiPort（code-server）
-  subdomainPort: 8080
-  # /agent/* → runtime.agentPort（opencode）
-  agentPathPort: 4096
 
 kubernetes:
   cluster: default

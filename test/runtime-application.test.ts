@@ -6,7 +6,7 @@ import { RuntimeEventStreamService } from "../src/application/runtime/runtime-ev
 import { RuntimeQueryService } from "../src/application/runtime/runtime-query-service";
 import { InMemoryRuntimeEventBus } from "../src/infrastructure/fake/in-memory-runtime-event-bus";
 import { InMemoryRuntimeStore } from "../src/infrastructure/fake/in-memory-runtime-store";
-import { NoopUserWorkspaceInitializer } from "../src/infrastructure/fake/noop-user-workspace-initializer";
+
 import { FakeRuntimeAgentProxy } from "../src/infrastructure/fake/fake-runtime-agent-proxy";
 import type { RuntimeSnapshot } from "../src/domain/runtime/runtime";
 import { FakeRuntimeWorkloadAdapter } from "../src/infrastructure/fake/fake-runtime-workload-adapter";
@@ -19,7 +19,6 @@ function buildServices() {
   const store = new InMemoryRuntimeStore();
   const workload = new FakeRuntimeWorkloadAdapter();
   const clock = new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z"));
-  const userWorkspaceInitializer = new NoopUserWorkspaceInitializer();
   const commandService = new RuntimeCommandService({
     clock,
     cluster: "default",
@@ -31,9 +30,9 @@ function buildServices() {
     store,
     templatesRoot: "./resources/templates",
     ttlSeconds: 3600,
-    userWorkspaceInitializer,
     workload,
     workdirRoot: "/nas/agent-master/users",
+    webuiDomainTemplate: "http://{runtimeId}.localhost/",
   });
   const queryService = new RuntimeQueryService({ store });
   const agentProxy = new FakeRuntimeAgentProxy();
@@ -111,11 +110,10 @@ describe("Runtime application services", () => {
     ]);
   });
 
-  test("restart only ensures workspace directories and never copies templates", async () => {
+  test("restart runtime restarts deployment without touching file system", async () => {
     const eventBus = new InMemoryRuntimeEventBus();
     const store = new InMemoryRuntimeStore();
     const workload = new FakeRuntimeWorkloadAdapter();
-    const userWorkspaceInitializer = new RecordingUserWorkspaceInitializer();
     const commandService = new RuntimeCommandService({
       clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
       cluster: "default",
@@ -127,17 +125,14 @@ describe("Runtime application services", () => {
       store,
       templatesRoot: "./resources/templates",
       ttlSeconds: 3600,
-      userWorkspaceInitializer,
       workload,
       workdirRoot: "/nas/agent-master/users",
+      webuiDomainTemplate: "http://{runtimeId}.localhost/",
     });
     await commandService.createRuntime({ userId: "user-a" });
-    userWorkspaceInitializer.clear();
 
     await commandService.restartRuntime({ reason: "reload-opencode-config", userId: "user-a" });
 
-    expect(userWorkspaceInitializer.initializeCalls).toEqual([]);
-    expect(userWorkspaceInitializer.ensureDirectoriesCalls).toEqual(["/nas/agent-master/users/user-a"]);
     expect(workload.restartedDeployments).toHaveLength(1);
   });
 
@@ -164,26 +159,25 @@ describe("Runtime application services", () => {
     expect(eventBus.published.map((event) => event.type)).toEqual(["runtime.ttl.extended"]);
   });
 
-   test("compensates deployment when service creation fails", async () => {
-     const eventBus = new InMemoryRuntimeEventBus();
-     const store = new InMemoryRuntimeStore();
-     const workload = new ServiceFailingWorkloadAdapter();
-     const userWorkspaceInitializer = new NoopUserWorkspaceInitializer();
-     const commandService = new RuntimeCommandService({
-         clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
-         cluster: "default",
-         eventBus,
-         namespace: "agent-runtime",
-         opencodePort: 4096,
-         runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
-         runtimePort: 8080,
-         store,
-         templatesRoot: "./resources/templates",
-         ttlSeconds: 3600,
-         userWorkspaceInitializer,
-         workload,
-         workdirRoot: "/nas/agent-master/users",
-      });
+  test("compensates deployment when service creation fails", async () => {
+    const eventBus = new InMemoryRuntimeEventBus();
+    const store = new InMemoryRuntimeStore();
+    const workload = new ServiceFailingWorkloadAdapter();
+    const commandService = new RuntimeCommandService({
+      clock: new FixedRuntimeClock(new Date("2026-06-12T00:00:00.000Z")),
+      cluster: "default",
+      eventBus,
+      namespace: "agent-runtime",
+      opencodePort: 4096,
+      runtimeImage: "ghcr.io/archaiharness/agent-runtime:latest",
+      runtimePort: 8080,
+      store,
+      templatesRoot: "./resources/templates",
+      ttlSeconds: 3600,
+      workload,
+      workdirRoot: "/nas/agent-master/users",
+      webuiDomainTemplate: "http://{runtimeId}.localhost/",
+    });
 
     await expect(commandService.createRuntime({ userId: "user-a" })).rejects.toThrow("service creation failed");
 

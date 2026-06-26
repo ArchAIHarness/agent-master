@@ -1,4 +1,4 @@
-import type { RuntimeEvent } from "../domain/runtime/runtime-events";
+import type { RuntimeEvent } from "./runtime-events";
 
 export type RuntimeEventListener = (event: RuntimeEvent) => void | Promise<void>;
 

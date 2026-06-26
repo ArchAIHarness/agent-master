@@ -1,4 +1,4 @@
-import type { RuntimeAgentProxyPort, RuntimeProxyRequest, RuntimeProxyResponse } from "../../ports/runtime-agent-proxy-port";
+import type { RuntimeAgentProxyPort, RuntimeProxyRequest, RuntimeProxyResponse } from "../../domain/runtime/runtime-agent-proxy-port";
 
 export class FakeRuntimeAgentProxy implements RuntimeAgentProxyPort {
   readonly requests: RuntimeProxyRequest[] = [];

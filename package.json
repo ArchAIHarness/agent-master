@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "Bun + TypeScript + Fastify service for OpenCode-based Agent Pod control and Agent API proxying.",
+  "description": "Bun + TypeScript + Express service for OpenCode-based Agent Pod control and Agent API proxying.",
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
@@ -11,9 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/sensible": "latest",
-    "@fastify/websocket": "^11.2.0",
-    "fastify": "latest",
+    "express": "^5.2.1",
     "http-proxy": "^1.18.1",
     "ioredis": "^5.11.1",
     "ws": "^8.21.0",
@@ -21,6 +19,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/express": "^5.0.6",
     "@types/http-proxy": "^1.17.17",
     "@types/ws": "^8.18.1",
     "typescript": "latest"

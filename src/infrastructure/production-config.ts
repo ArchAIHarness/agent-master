@@ -18,6 +18,7 @@ const productionConfigSchema = z.object({
     ttl: z.number().int().positive(),
     webui: z.object({
       port: z.number().int().min(1).max(65_535),
+      domainTemplate: z.string().min(1).default("http://{runtimeId}.localhost/"),
     }),
     agent: z.object({
       port: z.number().int().min(1).max(65_535).default(4096),
@@ -39,10 +40,6 @@ const productionConfigSchema = z.object({
   init: z.object({
     templatesRoot: z.string().min(1),
   }),
-  proxy: z.object({
-    subdomainPort: z.number().int().min(1).max(65_535).default(8080),
-    agentPathPort: z.number().int().min(1).max(65_535).default(4096),
-  }).default({ subdomainPort: 8080, agentPathPort: 4096 }),
   kubernetes: z.object({
     cluster: z.string().min(1),
     namespace: z.string().min(1),

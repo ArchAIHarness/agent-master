@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 
-import type { RuntimeDependenciesOptions } from "../ports/runtime-dependencies";
+import type { RuntimeDependenciesOptions } from "../application/runtime/dependencies";
 import { SystemRuntimeClock } from "./fake/fixed-runtime-clock";
-import { FileSystemUserWorkspaceInitializer } from "./file-system-user-workspace-initializer";
+import { RuntimeCommandService } from "../application/runtime/runtime-command-service";
+
 import { InMemoryRuntimeEventBus } from "./fake/in-memory-runtime-event-bus";
 import { KubernetesFetchHttpClient } from "./kubernetes/kubernetes-http-client";
 import { KubernetesRestWorkloadAdapter, type KubernetesHttpClient } from "./kubernetes/kubernetes-rest-workload-adapter";
@@ -19,7 +20,9 @@ export interface BuildProductionRuntimeDependenciesOptions {
   readonly redisClient?: RedisKeyValueClient;
 }
 
-export function buildProductionRuntimeDependencies(options: BuildProductionRuntimeDependenciesOptions = {}): RuntimeDependenciesOptions {
+export function buildProductionRuntimeDependencies(options: BuildProductionRuntimeDependenciesOptions = {}): RuntimeDependenciesOptions & {
+  commandService: RuntimeCommandService;
+} {
   const config = options.config ?? loadProductionConfigSyncUnsupported();
   const password = resolveConfiguredPassword(config.redis.password);
   const redisClient =
@@ -42,8 +45,27 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
       apiServer: resolveKubernetesApiServer(),
       ...readServiceAccountCredentials(),
     });
-  const userWorkspaceInitializer = new FileSystemUserWorkspaceInitializer();
-
+  const workload = new KubernetesRestWorkloadAdapter({
+    http: kubernetesHttp,
+    resourceRequests: config.runtime.resources.requests,
+    resourceLimits: config.runtime.resources.limits,
+    workspacePvcClaimName: config.runtime.workspacePvcClaimName,
+    workspacePvcSubPathRoot: config.runtime.workspacePvcSubPathRoot,
+  });
+  const commandService = new RuntimeCommandService({
+    clock: new SystemRuntimeClock(),
+    cluster: config.kubernetes.cluster,
+    eventBus: new InMemoryRuntimeEventBus(),
+    namespace: config.kubernetes.namespace,
+    runtimeImage: config.runtime.image,
+    runtimePort: config.runtime.webui.port,
+    opencodePort: config.runtime.agent.port,
+    store,
+    templatesRoot: config.init.templatesRoot,
+    ttlSeconds: config.runtime.ttl,
+    workload,
+    workdirRoot: config.runtime.workdir,
+  });
   return {
     clock: new SystemRuntimeClock(),
     cluster: config.kubernetes.cluster,
@@ -56,16 +78,11 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     store,
     templatesRoot: config.init.templatesRoot,
     ttlSeconds: config.runtime.ttl,
-    userWorkspaceInitializer,
     websocket: new RuntimeServiceWebSocketProxy({ namespace: config.kubernetes.namespace }),
-    workload: new KubernetesRestWorkloadAdapter({
-      http: kubernetesHttp,
-      resourceRequests: config.runtime.resources.requests,
-      resourceLimits: config.runtime.resources.limits,
-      workspacePvcClaimName: config.runtime.workspacePvcClaimName,
-      workspacePvcSubPathRoot: config.runtime.workspacePvcSubPathRoot,
-    }),
+    workload,
     workdirRoot: config.runtime.workdir,
+    webuiDomainTemplate: config.runtime.webui.domainTemplate,
+    commandService,
   };
 }
 

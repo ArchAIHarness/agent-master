@@ -1,5 +1,5 @@
 import type { RuntimeEvent } from "../../domain/runtime/runtime-events";
-import type { RuntimeEventBus, RuntimeEventListener } from "../../ports/runtime-event-bus";
+import type { RuntimeEventBus, RuntimeEventListener } from "../../domain/runtime/runtime-event-bus";
 
 export class InMemoryRuntimeEventBus implements RuntimeEventBus {
   readonly published: RuntimeEvent[] = [];
