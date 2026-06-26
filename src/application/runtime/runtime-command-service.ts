@@ -14,6 +14,7 @@ export interface RuntimeCommandServiceDependencies {
   readonly namespace: string;
   readonly runtimeImage: string;
   readonly runtimePort: number;
+  readonly opencodePort: number;
   readonly store: RuntimeStore;
   readonly templatesRoot: string;
   readonly ttlSeconds: number;
@@ -54,6 +55,7 @@ export class RuntimeCommandService {
       cluster: this.dependencies.cluster,
       namespace: this.dependencies.namespace,
       now: this.dependencies.clock.now(),
+      opencodePort: this.dependencies.opencodePort,
       runtimeId,
       servicePort: this.dependencies.runtimePort,
       targetPort: this.dependencies.runtimePort,

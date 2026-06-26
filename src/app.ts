@@ -11,6 +11,7 @@ import { loadConfig, type SchedulerConfig } from "./config";
 import { registerAgentProxyRoutes } from "./interfaces/http/agent-proxy-routes";
 import { registerAgentWebSocketRoutes } from "./interfaces/http/agent-websocket-routes";
 import { registerRuntimeRoutes } from "./interfaces/http/runtime-routes";
+import { registerWebUiRoutes } from "./interfaces/http/webui-routes";
 import type { RuntimeDependenciesOptions } from "./ports/runtime-dependencies";
 
 export interface BuildAppOptions {
@@ -70,5 +71,8 @@ function registerRuntimeModules(app: FastifyInstance, runtimeDependencies: Runti
       websocket: runtimeDependencies.websocket,
     });
     void app.register(registerAgentWebSocketRoutes, { websocketService });
+
+    // 注册 VSCode Web UI 入口（独立于 /agent/* API 代理）
+    void app.register(registerWebUiRoutes, { proxyService, websocketService });
   }
 }

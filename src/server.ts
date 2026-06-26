@@ -1,14 +1,20 @@
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
-import { buildProductionRuntimeDependenciesFromFile } from "./infrastructure/production-runtime-dependencies";
+import { loadProductionConfig } from "./infrastructure/production-config";
+import { buildProductionRuntimeDependencies } from "./infrastructure/production-runtime-dependencies";
+import { createProxyDispatcher } from "./interfaces/http/proxy-dispatcher";
 
-const config = loadConfig();
-const runtime = await buildProductionRuntimeDependenciesFromFile();
-const app = buildApp({ config, runtime });
+const schedulerConfig = loadConfig();
+const productionConfig = await loadProductionConfig();
+const runtime = buildProductionRuntimeDependencies({ config: productionConfig });
+const app = buildApp({ config: schedulerConfig, runtime });
 
-try {
-  await app.listen({ host: config.host, port: config.port });
-} catch (error) {
-  app.log.error({ error }, "failed to start agent-master");
-  process.exit(1);
-}
+// Fastify 启动后安装代理分发器（此时所有插件已就绪）
+await app.listen({ host: schedulerConfig.host, port: schedulerConfig.port });
+
+const proxyDispatcher = createProxyDispatcher(runtime.store, {
+  namespace: productionConfig.kubernetes.namespace,
+  subdomainPort: productionConfig.proxy.subdomainPort,
+  agentPathPort: productionConfig.proxy.agentPathPort,
+});
+proxyDispatcher.install(app.server);

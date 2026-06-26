@@ -14,6 +14,7 @@ export interface RuntimeDependenciesOptions {
   readonly proxy: RuntimeAgentProxyPort;
   readonly runtimeImage: string;
   readonly runtimePort: number;
+  readonly opencodePort: number;
   readonly store: RuntimeStore;
   readonly templatesRoot: string;
   readonly ttlSeconds: number;

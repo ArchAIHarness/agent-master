@@ -14,6 +14,7 @@ export interface RuntimeSnapshot {
   readonly podSelector: Record<string, string>;
   readonly servicePort: number;
   readonly targetPort: number;
+  readonly opencodePort: number;
   readonly workspaceRootPath: string;
   readonly leaseExpireAt?: string;
   readonly createdAt: string;
@@ -27,6 +28,7 @@ export interface CreateRuntimeInput {
   readonly namespace: string;
   readonly servicePort: number;
   readonly targetPort: number;
+  readonly opencodePort: number;
   readonly workspaceRootPath: string;
   readonly now?: Date;
 }
@@ -44,7 +46,8 @@ export class RuntimeAggregate {
       createdAt: now,
       deploymentName: resourceName,
       namespace: input.namespace,
-       podSelector: {
+      opencodePort: input.opencodePort,
+      podSelector: {
         app: "agent-runtime",
         runtimeId: input.runtimeId,
         userId: input.userId,

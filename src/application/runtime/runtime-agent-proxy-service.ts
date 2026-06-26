@@ -1,7 +1,7 @@
-import { RuntimeAggregate } from "../../domain/runtime/runtime";
+import { RuntimeAggregate, type RuntimeSnapshot } from "../../domain/runtime/runtime";
 import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
 import type { RuntimeClock } from "../../ports/runtime-clock";
-import type { RuntimeAgentProxyPort, RuntimeProxyHeaders, RuntimeProxyQuery, RuntimeProxyResponse } from "../../ports/runtime-agent-proxy-port";
+import type { RuntimeAgentProxyPort, RuntimeProxyQuery, RuntimeProxyResponse } from "../../ports/runtime-agent-proxy-port";
 import type { RuntimeEventBus } from "../../ports/runtime-event-bus";
 import type { RuntimeStore } from "../../ports/runtime-store";
 import { stripAuthorizationHeader } from "./runtime-path-service";
@@ -16,6 +16,15 @@ export interface RuntimeAgentProxyServiceDependencies {
 
 export interface RuntimeAgentProxyInput {
   readonly userId: string;
+  readonly method: string;
+  readonly path: string;
+  readonly query: RuntimeProxyQuery;
+  readonly headers: Record<string, string | undefined>;
+  readonly body?: unknown;
+}
+
+export interface RuntimeAgentProxyByRuntimeIdInput {
+  readonly runtimeId: string;
   readonly method: string;
   readonly path: string;
   readonly query: RuntimeProxyQuery;
@@ -43,16 +52,32 @@ export class RuntimeAgentProxyService {
     if (!runtime || runtime.status !== "running") {
       throw new RuntimeNotFoundError(input.userId);
     }
+    // /agent/* → opencode API port
+    return this.forwardToRuntime(runtime, input, runtime.opencodePort);
+  }
 
-    const transformed = this.transformRequest(input);
+  async proxyByRuntimeId(input: RuntimeAgentProxyByRuntimeIdInput): Promise<RuntimeProxyResponse> {
+    const runtime = await this.dependencies.store.getByRuntimeId(input.runtimeId);
+    if (!runtime || runtime.status !== "running") {
+      throw new RuntimeNotFoundError(input.runtimeId);
+    }
+    // 子域名/webui → code-server port (servicePort)
+    return this.forwardToRuntime(runtime, input);
+  }
+
+  private async forwardToRuntime(
+    runtime: RuntimeSnapshot,
+    input: { body?: unknown; method: string; path: string; query: RuntimeProxyQuery; headers: Record<string, string | undefined> },
+    port?: number,
+  ): Promise<RuntimeProxyResponse> {
     const response = await this.dependencies.proxy.forward({
-      body: transformed.body,
+      body: input.body,
       headers: stripAuthorizationHeader(input.headers),
       method: input.method,
       path: input.path,
-      query: transformed.query,
+      query: input.query,
       serviceName: runtime.serviceName,
-      servicePort: runtime.servicePort,
+      servicePort: port ?? runtime.servicePort,
     });
 
     await this.extendLease(runtime);
@@ -71,9 +96,6 @@ export class RuntimeAgentProxyService {
     await this.dependencies.store.save(runtime.snapshot());
   }
 
-  private transformRequest(input: RuntimeAgentProxyInput): { body: unknown; query: RuntimeProxyQuery } {
-    return { body: input.body, query: input.query };
-  }
 }
 
 export function isOpenCodeSseProxyPath(path: string): boolean {

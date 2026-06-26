@@ -8,9 +8,10 @@ describe("RuntimeAggregate", () => {
     const runtime = RuntimeAggregate.create({
       cluster: "cluster-a",
       namespace: "agent-runtime",
+      opencodePort: 4096,
       runtimeId: "rt-abc123",
-      servicePort: 4096,
-      targetPort: 4096,
+      servicePort: 8080,
+      targetPort: 8080,
       userId: "user-a",
       workspaceRootPath: "/nas/agent-master/users/user-a",
     });
@@ -27,8 +28,9 @@ describe("RuntimeAggregate", () => {
       status: "running",
       deploymentName: "agent-rt-abc123",
       serviceName: "agent-rt-abc123",
-      servicePort: 4096,
-      targetPort: 4096,
+      opencodePort: 4096,
+      servicePort: 8080,
+      targetPort: 8080,
       workspaceRootPath: "/nas/agent-master/users/user-a",
     });
     expect(runtime.pullEvents().map((event) => event.type)).toEqual([
@@ -45,9 +47,10 @@ describe("RuntimeAggregate", () => {
     const runtime = RuntimeAggregate.create({
       cluster: "cluster-a",
       namespace: "agent-runtime",
+      opencodePort: 4096,
       runtimeId: "rt-delete",
-      servicePort: 4096,
-      targetPort: 4096,
+      servicePort: 8080,
+      targetPort: 8080,
       userId: "user-delete",
       workspaceRootPath: "/nas/agent-master/users/user-delete",
     });
@@ -68,9 +71,10 @@ describe("RuntimeAggregate", () => {
     const runtime = RuntimeAggregate.create({
       cluster: "cluster-a",
       namespace: "agent-runtime",
+      opencodePort: 4096,
       runtimeId: "rt-pending",
-      servicePort: 4096,
-      targetPort: 4096,
+      servicePort: 8080,
+      targetPort: 8080,
       userId: "user-pending",
       workspaceRootPath: "/nas/agent-master/users/user-pending",
     });

@@ -23,16 +23,32 @@ runtime:
   # Replace with the local agent-image when running in local Kubernetes.
   image: agent-image:latest
   ttl: 3600
-  port: 4096
+  webui:
+    port: 8080
+  agent:
+    port: 4096
   workdir: /nas/agent-master/users
   workspacePvcClaimName: agent-runtime-nas
   workspacePvcSubPathRoot: agent-master/users
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 
 init:
   # Root directory where default initialization templates are stored.
   # - AGENTS.md → user workdir AGENTS.md (created if not exists)
   # - opencode.json → user workdir .opencode/opencode.json (created if not exists)
   templatesRoot: ./resources/templates
+
+proxy:
+  # 子域名 → runtime.webuiPort（code-server）
+  subdomainPort: 8080
+  # /agent/* → runtime.agentPort（opencode）
+  agentPathPort: 4096
 
 kubernetes:
   cluster: default

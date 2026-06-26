@@ -18,12 +18,19 @@ data:
       password: ""
 
     runtime:
-      image: agent-image:latest
+      image: build-on-vscode-opencode-image:local
       ttl: 3600
-      port: 4096
+      port: 8080
       workdir: /nas/agent-master/users
       workspacePvcClaimName: agent-runtime-nas
       workspacePvcSubPathRoot: agent-master/users
+      resources:
+        requests:
+          cpu: 2000m
+          memory: 2Gi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
 
     init:
       templatesRoot: ./resources/templates

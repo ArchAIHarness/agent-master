@@ -88,5 +88,5 @@ async function readBody(response: Response): Promise<unknown> {
   if (contentType.includes("application/json")) {
     return response.json();
   }
-  return response.text();
+  return response.arrayBuffer();
 }

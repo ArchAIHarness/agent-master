@@ -5,30 +5,45 @@ export interface KubernetesHttpClient {
   request(input: { method: string; path: string; body?: unknown; contentType?: string }): Promise<unknown>;
 }
 
+export interface KubernetesResourceConfig {
+  readonly cpu: string;
+  readonly memory: string;
+}
+
 export interface KubernetesRestWorkloadAdapterOptions {
   readonly http: KubernetesHttpClient;
   readonly readyPollIntervalMs?: number;
   readonly readyTimeoutMs?: number;
   readonly workspacePvcClaimName: string;
   readonly workspacePvcSubPathRoot: string;
+  readonly resourceRequests?: KubernetesResourceConfig;
+  readonly resourceLimits?: KubernetesResourceConfig;
 }
 
-const runtimeResourceRequest = {
-  cpuText: "100m",
-  memoryText: "512Mi",
+const defaultRuntimeResourceRequest: KubernetesResourceConfig = {
+  cpu: "100m",
+  memory: "512Mi",
 };
 
-const runtimeResourceLimit = {
-  cpuText: "500m",
-  memoryText: "1Gi",
+const defaultRuntimeResourceLimit: KubernetesResourceConfig = {
+  cpu: "500m",
+  memory: "1Gi",
 };
 
 export class KubernetesRestWorkloadAdapter implements RuntimeWorkloadPort {
-  constructor(private readonly options: KubernetesRestWorkloadAdapterOptions) {}
+  private readonly resourceRequests: KubernetesResourceConfig;
+  private readonly resourceLimits: KubernetesResourceConfig;
+
+  constructor(private readonly options: KubernetesRestWorkloadAdapterOptions) {
+    this.resourceRequests = options.resourceRequests ?? defaultRuntimeResourceRequest;
+    this.resourceLimits = options.resourceLimits ?? defaultRuntimeResourceLimit;
+  }
 
   async createDeployment(spec: RuntimeWorkloadSpec): Promise<void> {
     await this.options.http.request({
       body: buildDeploymentManifest(spec, {
+        resourceLimits: this.resourceLimits,
+        resourceRequests: this.resourceRequests,
         workspacePvcClaimName: this.options.workspacePvcClaimName,
         workspacePvcSubPathRoot: this.options.workspacePvcSubPathRoot,
       }),
@@ -116,7 +131,12 @@ function isDeploymentReady(value: unknown): boolean {
 
 function buildDeploymentManifest(
   spec: RuntimeWorkloadSpec,
-  storage: { readonly workspacePvcClaimName: string; readonly workspacePvcSubPathRoot: string },
+  storage: {
+    readonly workspacePvcClaimName: string;
+    readonly workspacePvcSubPathRoot: string;
+    readonly resourceRequests: KubernetesResourceConfig;
+    readonly resourceLimits: KubernetesResourceConfig;
+  },
 ): unknown {
   const runtimeSubPath = buildWorkspaceSubPath(storage.workspacePvcSubPathRoot, spec.runtime.userId, "runtime");
   const globalSubPath = buildWorkspaceSubPath(storage.workspacePvcSubPathRoot, spec.runtime.userId, "global");
@@ -158,12 +178,13 @@ function buildDeploymentManifest(
           ],
           containers: [
             {
-              args: [buildOpenCodeStartupCommand(spec.runtime.targetPort)],
-              command: ["/bin/sh", "-c"],
               image: spec.image,
               imagePullPolicy: "IfNotPresent",
               name: "opencode-runtime",
-              ports: [{ containerPort: spec.runtime.targetPort, name: "http" }],
+              ports: [
+                { containerPort: spec.runtime.targetPort, name: "http" },
+                { containerPort: spec.runtime.opencodePort, name: "opencode" },
+              ],
               lifecycle: {
                 preStop: {
                   exec: {
@@ -173,12 +194,12 @@ function buildDeploymentManifest(
               },
               resources: {
                 limits: {
-                  cpu: runtimeResourceLimit.cpuText,
-                  memory: runtimeResourceLimit.memoryText,
+                  cpu: storage.resourceLimits.cpu,
+                  memory: storage.resourceLimits.memory,
                 },
                 requests: {
-                  cpu: runtimeResourceRequest.cpuText,
-                  memory: runtimeResourceRequest.memoryText,
+                  cpu: storage.resourceRequests.cpu,
+                  memory: storage.resourceRequests.memory,
                 },
               },
               volumeMounts: [
@@ -231,27 +252,6 @@ function sanitizeSubPathSegment(value: string): string {
   return value.replaceAll("/", "-");
 }
 
-function quoteShellArg(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function buildOpenCodeStartupCommand(targetPort: number): string {
-  const command = `opencode web --port ${targetPort} --hostname 0.0.0.0`;
-  return [
-    "set -u",
-    command,
-    "status=$?",
-    "if [ $status -eq 0 ] || [ $status -eq 130 ] || [ $status -eq 143 ]; then exit $status; fi",
-    "stamp=$(date +%Y%m%d%H%M%S)",
-    "mkdir -p /root/.config/opencode/.quarantine",
-    "mkdir -p /root/.config/opencode/.recovered",
-    'for item in /root/.config/opencode/* /root/.config/opencode/.[!.]* /root/.config/opencode/..?*; do [ -e "$item" ] || continue; name=$(basename "$item"); [ "$name" = ".quarantine" ] && continue; [ "$name" = ".recovered" ] && continue; mv "$item" /root/.config/opencode/.quarantine/"$stamp-$name"; done',
-    "echo '{}' > /root/.config/opencode/opencode.jsonc",
-    'echo "OpenCode config was quarantined after startup failure $status; retrying with minimal config" >&2',
-    command,
-  ].join("; ");
-}
-
 function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
   return {
     apiVersion: "v1",
@@ -267,6 +267,11 @@ function buildServiceManifest(runtime: RuntimeSnapshot): unknown {
           name: "http",
           port: runtime.servicePort,
           targetPort: runtime.targetPort,
+        },
+        {
+          name: "opencode",
+          port: runtime.opencodePort,
+          targetPort: runtime.opencodePort,
         },
       ],
       selector: runtime.podSelector,

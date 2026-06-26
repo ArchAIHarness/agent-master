@@ -16,14 +16,33 @@ const productionConfigSchema = z.object({
   runtime: z.object({
     image: z.string().min(1),
     ttl: z.number().int().positive(),
-    port: z.number().int().min(1).max(65_535),
+    webui: z.object({
+      port: z.number().int().min(1).max(65_535),
+    }),
+    agent: z.object({
+      port: z.number().int().min(1).max(65_535).default(4096),
+    }),
     workdir: z.string().min(1),
     workspacePvcClaimName: z.string().min(1),
     workspacePvcSubPathRoot: z.string().min(1),
+    resources: z.object({
+      requests: z.object({
+        cpu: z.string().min(1).default("100m"),
+        memory: z.string().min(1).default("512Mi"),
+      }).default({ cpu: "100m", memory: "512Mi" }),
+      limits: z.object({
+        cpu: z.string().min(1).default("500m"),
+        memory: z.string().min(1).default("1Gi"),
+      }).default({ cpu: "500m", memory: "1Gi" }),
+    }).default({ requests: { cpu: "100m", memory: "512Mi" }, limits: { cpu: "500m", memory: "1Gi" } }),
   }),
   init: z.object({
     templatesRoot: z.string().min(1),
   }),
+  proxy: z.object({
+    subdomainPort: z.number().int().min(1).max(65_535).default(8080),
+    agentPathPort: z.number().int().min(1).max(65_535).default(4096),
+  }).default({ subdomainPort: 8080, agentPathPort: 4096 }),
   kubernetes: z.object({
     cluster: z.string().min(1),
     namespace: z.string().min(1),
@@ -47,6 +66,7 @@ function parseYamlSubset(content: string): unknown {
   const lines = content.split(/\r?\n/);
   let section = "";
   let nested = "";
+  let deepNested = "";
 
   for (const rawLine of lines) {
     const withoutComment = stripComment(rawLine);
@@ -60,12 +80,14 @@ function parseYamlSubset(content: string): unknown {
     if (indent === 0 && line.endsWith(":")) {
       section = line.slice(0, -1);
       nested = "";
+      deepNested = "";
       root[section] = {};
       continue;
     }
 
     if (indent === 2 && line.endsWith(":")) {
       nested = line.slice(0, -1);
+      deepNested = "";
       const target = ensureRecord(root, section);
       target[nested] = {};
       continue;
@@ -73,12 +95,24 @@ function parseYamlSubset(content: string): unknown {
 
     if (indent === 2) {
       nested = "";
+      deepNested = "";
       assignKeyValue(ensureRecord(root, section), line);
+      continue;
+    }
+
+    if (indent === 4 && line.endsWith(":")) {
+      deepNested = line.slice(0, -1);
+      const target = ensureRecord(ensureRecord(root, section), nested);
+      target[deepNested] = {};
       continue;
     }
 
     if (indent === 4 && nested) {
       assignKeyValue(ensureRecord(ensureRecord(root, section), nested), line);
+    }
+
+    if (indent === 6 && deepNested && nested) {
+      assignKeyValue(ensureRecord(ensureRecord(ensureRecord(root, section), nested), deepNested), line);
     }
   }
 

@@ -51,7 +51,8 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     namespace: config.kubernetes.namespace,
     proxy: new RuntimeServiceFetchProxy({ namespace: config.kubernetes.namespace }),
     runtimeImage: config.runtime.image,
-    runtimePort: config.runtime.port,
+    runtimePort: config.runtime.webui.port,
+    opencodePort: config.runtime.agent.port,
     store,
     templatesRoot: config.init.templatesRoot,
     ttlSeconds: config.runtime.ttl,
@@ -59,6 +60,8 @@ export function buildProductionRuntimeDependencies(options: BuildProductionRunti
     websocket: new RuntimeServiceWebSocketProxy({ namespace: config.kubernetes.namespace }),
     workload: new KubernetesRestWorkloadAdapter({
       http: kubernetesHttp,
+      resourceRequests: config.runtime.resources.requests,
+      resourceLimits: config.runtime.resources.limits,
       workspacePvcClaimName: config.runtime.workspacePvcClaimName,
       workspacePvcSubPathRoot: config.runtime.workspacePvcSubPathRoot,
     }),

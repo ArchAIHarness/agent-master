@@ -23,29 +23,55 @@ export class RedisRuntimeStore implements RuntimeStore {
 
   async getByUserId(userId: string): Promise<RuntimeSnapshot | null> {
     await this.ensureSelected();
-    const value = await this.options.client.get(this.key(userId));
+    const value = await this.options.client.get(this.userKey(userId));
     return value ? (JSON.parse(value) as RuntimeSnapshot) : null;
+  }
+
+  async getByRuntimeId(runtimeId: string): Promise<RuntimeSnapshot | null> {
+    await this.ensureSelected();
+    const userId = await this.options.client.get(this.runtimeIdIndexKey(runtimeId));
+    if (!userId) {
+      return null;
+    }
+    return this.getByUserId(userId);
   }
 
   async tryCreateForUser(snapshot: RuntimeSnapshot, ttlSeconds: number): Promise<boolean> {
     await this.ensureSelected();
-    return this.options.client.setNx(this.key(snapshot.userId), JSON.stringify(snapshot), { ttlSeconds });
+    const created = await this.options.client.setNx(this.userKey(snapshot.userId), JSON.stringify(snapshot), { ttlSeconds });
+    if (created) {
+      await this.options.client.set(this.runtimeIdIndexKey(snapshot.runtimeId), snapshot.userId, {
+        ttlSeconds,
+      });
+    }
+    return created;
   }
 
   async save(snapshot: RuntimeSnapshot): Promise<void> {
     await this.ensureSelected();
-    await this.options.client.set(this.key(snapshot.userId), JSON.stringify(snapshot), {
+    await this.options.client.set(this.userKey(snapshot.userId), JSON.stringify(snapshot), {
+      ttlSeconds: this.options.ttlSeconds,
+    });
+    await this.options.client.set(this.runtimeIdIndexKey(snapshot.runtimeId), snapshot.userId, {
       ttlSeconds: this.options.ttlSeconds,
     });
   }
 
   async deleteByUserId(userId: string): Promise<void> {
     await this.ensureSelected();
-    await this.options.client.del(this.key(userId));
+    const snapshot = await this.getByUserId(userId);
+    if (snapshot) {
+      await this.options.client.del(this.runtimeIdIndexKey(snapshot.runtimeId));
+    }
+    await this.options.client.del(this.userKey(userId));
   }
 
-  private key(userId: string): string {
+  private userKey(userId: string): string {
     return `${this.options.keyPrefix}:${userId}`;
+  }
+
+  private runtimeIdIndexKey(runtimeId: string): string {
+    return `${this.options.keyPrefix}:runtimeId:${runtimeId}`;
   }
 
   private async ensureSelected(): Promise<void> {

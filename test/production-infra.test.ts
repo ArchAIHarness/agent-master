@@ -13,6 +13,7 @@ const runtime: RuntimeSnapshot = {
   deploymentName: "opencode-rt-000001",
   leaseExpireAt: "2026-06-12T01:00:00.000Z",
   namespace: "agent-runtime",
+  opencodePort: 4096,
   podSelector: {
     app: "opencode-runtime",
     runtimeId: "rt-000001",
@@ -20,9 +21,9 @@ const runtime: RuntimeSnapshot = {
   },
   runtimeId: "rt-000001",
   serviceName: "opencode-rt-000001",
-  servicePort: 4096,
+  servicePort: 8080,
   status: "running",
-  targetPort: 4096,
+  targetPort: 8080,
   updatedAt: "2026-06-12T00:00:00.000Z",
   userId: "user-a",
   workspaceRootPath: "/nas/agent-master/users/user-a",
@@ -44,7 +45,10 @@ redis:
 runtime:
   image: ghcr.io/archaiharness/agent-runtime:latest
   ttl: 3600
-  port: 4096
+  webui:
+    port: 8080
+  agent:
+    port: 4096
   workdir: /nas/agent-master/users
   workspacePvcClaimName: agent-runtime-nas
   workspacePvcSubPathRoot: agent-master/users
@@ -66,6 +70,8 @@ kubernetes:
       workspacePvcClaimName: "agent-runtime-nas",
       workspacePvcSubPathRoot: "agent-master/users",
     });
+    expect(config.runtime.webui.port).toBe(8080);
+    expect(config.runtime.agent.port).toBe(4096);
   });
 });
 
@@ -84,7 +90,10 @@ describe("RedisRuntimeStore", () => {
       ttlSeconds: 3600,
     });
     expect(loaded).toMatchObject({ runtimeId: "rt-000001", userId: "user-a", status: "running" });
-    expect(client.deletedKeys).toEqual(["agent-runtime:user:user-a"]);
+    expect(client.deletedKeys.sort()).toEqual([
+      "agent-runtime:user:runtimeId:rt-000001",
+      "agent-runtime:user:user-a",
+    ]);
   });
 });
 
@@ -126,9 +135,12 @@ describe("KubernetesRestWorkloadAdapter", () => {
     expect(initCommand).toContain("mkdir -p /root/.local/share/opencode");
     expect(initCommand).toContain("mkdir -p /root/.cache/opencode");
     expect(initCommand).not.toContain("/app/.runtime/opencode");
-    expect(runtimeContainer.command).toEqual(["/bin/sh", "-c"]);
-    expect(runtimeContainer.args[0]).toContain("opencode web --port 4096 --hostname 0.0.0.0");
-    expect(runtimeContainer.args[0]).toContain("quarantine");
+    expect(runtimeContainer.command).toBeUndefined();
+    expect(runtimeContainer.args).toBeUndefined();
+    expect(runtimeContainer.ports).toEqual([
+      { containerPort: 8080, name: "http" },
+      { containerPort: 4096, name: "opencode" },
+    ]);
     expect(runtimeContainer.volumeMounts).toEqual([
       { mountPath: "/app", name: "user-storage", subPath: "agent-master/users/user-a/runtime" },
       { mountPath: "/root", name: "user-storage", subPath: "agent-master/users/user-a/global" },
@@ -225,7 +237,10 @@ redis:
 runtime:
   image: ghcr.io/archaiharness/agent-runtime:latest
   ttl: 3600
-  port: 4096
+  webui:
+    port: 8080
+  agent:
+    port: 4096
   workdir: /nas/agent-master/users
   workspacePvcClaimName: agent-runtime-nas
   workspacePvcSubPathRoot: agent-master/users
@@ -239,7 +254,8 @@ kubernetes:
       redisClient: new RecordingRedisClient(),
     });
 
-    expect(dependencies.runtimePort).toBe(4096);
+    expect(dependencies.runtimePort).toBe(8080);
+    expect(dependencies.opencodePort).toBe(4096);
     expect(dependencies.namespace).toBe("agent-runtime");
     expect(dependencies.cluster).toBe("default");
   });

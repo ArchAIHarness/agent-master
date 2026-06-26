@@ -1,4 +1,4 @@
-import { RuntimeAggregate } from "../../domain/runtime/runtime";
+import { RuntimeAggregate, type RuntimeSnapshot } from "../../domain/runtime/runtime";
 import { RuntimeNotFoundError } from "../../domain/runtime/runtime-errors";
 import type { RuntimeClock } from "../../ports/runtime-clock";
 import type {
@@ -28,6 +28,15 @@ export interface RuntimeAgentWebSocketBridgeInput {
   readonly downstream: RuntimeWebSocketDownstream;
 }
 
+export interface RuntimeWebSocketBridgeByRuntimeIdInput {
+  readonly runtimeId: string;
+  readonly path: string;
+  readonly query: RuntimeWebSocketQuery;
+  readonly headers: RuntimeWebSocketHeaders;
+  readonly subprotocols: readonly string[];
+  readonly downstream: RuntimeWebSocketDownstream;
+}
+
 const DEFAULT_LEASE_RENEWAL_MS = 300_000;
 
 export class RuntimeAgentWebSocketService {
@@ -38,13 +47,32 @@ export class RuntimeAgentWebSocketService {
     if (!runtime || runtime.status !== "running") {
       throw new RuntimeNotFoundError(input.userId);
     }
+    // /agent/ws/* → opencode API port
+    await this.bridgeToRuntime(runtime, input.userId, input, runtime.opencodePort);
+  }
+
+  async bridgeByRuntimeId(input: RuntimeWebSocketBridgeByRuntimeIdInput): Promise<void> {
+    const runtime = await this.dependencies.store.getByRuntimeId(input.runtimeId);
+    if (!runtime || runtime.status !== "running") {
+      throw new RuntimeNotFoundError(input.runtimeId);
+    }
+    // 子域名 WebSocket → code-server port (servicePort)
+    await this.bridgeToRuntime(runtime, runtime.userId, input);
+  }
+
+  private async bridgeToRuntime(
+    runtime: RuntimeSnapshot,
+    userId: string,
+    input: { path: string; query: RuntimeWebSocketQuery; headers: RuntimeWebSocketHeaders; subprotocols: readonly string[]; downstream: RuntimeWebSocketDownstream },
+    port?: number,
+  ): Promise<void> {
 
     const upstream = this.dependencies.websocket.connect({
       headers: input.headers,
       path: input.path,
       query: input.query,
       serviceName: runtime.serviceName,
-      servicePort: runtime.servicePort,
+      servicePort: port ?? runtime.servicePort,
       subprotocols: input.subprotocols,
     });
 
@@ -77,10 +105,10 @@ export class RuntimeAgentWebSocketService {
     };
 
     upstream.onOpen(() => {
-      void this.renewLease(input.userId);
+      void this.renewLease(userId);
       const intervalMs = this.dependencies.leaseRenewalIntervalMs ?? DEFAULT_LEASE_RENEWAL_MS;
       renewalTimer = setInterval(() => {
-        void this.renewLease(input.userId);
+        void this.renewLease(userId);
       }, intervalMs);
     });
 
