@@ -22,7 +22,7 @@ data:
       ttl: 3600
       port: 8080
       workdir: /nas/agent-master/users
-      workspacePvcClaimName: agent-runtime-nas
+      workspacePvcClaimName: agent-master-nas
       workspacePvcSubPathRoot: agent-master/users
       resources:
         requests:

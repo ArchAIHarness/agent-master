@@ -28,7 +28,7 @@ runtime:
   agent:
     port: 4096
   workdir: /nas/agent-master/users
-  workspacePvcClaimName: agent-runtime-nas
+  workspacePvcClaimName: agent-master-nas
   workspacePvcSubPathRoot: agent-master/users
   resources:
     requests:

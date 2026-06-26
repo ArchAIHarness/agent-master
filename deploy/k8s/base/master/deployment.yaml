@@ -34,8 +34,6 @@ spec:
             - name: config
               mountPath: /app/config.yaml
               subPath: config.yaml
-            - name: nas
-              mountPath: /nas
           readinessProbe:
             httpGet:
               path: /health
@@ -52,9 +50,6 @@ spec:
         - name: config
           configMap:
             name: agent-master-config
-        - name: nas
-          persistentVolumeClaim:
-            claimName: agent-master-nas
 ---
 apiVersion: v1
 kind: Service

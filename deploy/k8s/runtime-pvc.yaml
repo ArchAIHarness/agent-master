@@ -1,0 +1,14 @@
+# Runtime Agent NAS PVC (用户工作目录持久化存储)
+# 用于所有 runtime Agent 的 /app 和 /root 挂载
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-runtime-nas
+  namespace: agent-master
+spec:
+  accessModes:
+    - ReadWriteMany  # 多 Pod 同时读写（不同用户的 runtime）
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: hostpath  # Docker Desktop 本地测试用，生产环境换成 NFS/CSI
